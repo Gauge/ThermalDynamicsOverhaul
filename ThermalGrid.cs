@@ -238,13 +238,13 @@ namespace ThermalOverhaul
             if (ActiveTime >= cfg.ActiveTime)
             {
                 UpdateTemperatures(ref Active, ActiveTime);
-                ActiveTime -= cfg.ActiveTime;
+                ActiveTime -= (cfg.ActiveTime < DeltaTime) ? DeltaTime : cfg.ActiveTime;
             }
 
             if (IdleTime >= cfg.IdleTime)
             {
                 UpdateTemperatures(ref Idle, IdleTime);
-                IdleTime -= cfg.IdleTime;
+                IdleTime -= (cfg.IdleTime < DeltaTime) ? DeltaTime : cfg.IdleTime;
             }
 
 		}
@@ -422,7 +422,7 @@ namespace ThermalOverhaul
 
         public Color GetTemperatureColor(float temp)
         {
-            float max = 150f;
+            float max = 100f;
             // Clamp the temperature to the range 0-100
             float t = Math.Max(0, Math.Min(max, temp));
 

@@ -33,7 +33,7 @@ namespace ThermalOverhaul
 				ThermalCell cell = tGrid.GetCellThermals(position);
 
 				MyAPIGateway.Utilities.ShowNotification($"[Grid] Cycles: {tGrid.TestCycles} All {tGrid.All.Count} Active {tGrid.Active.Count} Idle {tGrid.Idle.Count}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Properties.Type} [{cell.State}] Temp: {cell.Temperature.ToString("n5")} Rate: {cell.LastHeatTransfer.ToString("n5")}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Properties.Type} [{cell.State}] Mass: {cell.Mass} Temp: {cell.Temperature.ToString("n3")} Rate: {cell.LastHeatTransfer.ToString("n3")}", 1, "White");
 
 			}
 		}
