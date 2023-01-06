@@ -25,20 +25,15 @@ namespace ThermalOverhaul
         public Dictionary<int, ThermalCell> Active;
         public Dictionary<int, ThermalCell> Idle;
 
-        private Queue<ThermalCell> queue;
+        private Queue<ThermalCell> activeQueue;
+        private Queue<ThermalCell> idleQueue;
 
         private ThermalCell Vacuum;
 
-        private float DeltaTime = 0;
         private float ActiveTime = 0;
         private float IdleTime = 0;
 
-
-        public int TestCycles = 0;
-
-        private long LastRunTimestamp = 0;
-
-        private static float ToSeconds = 1f / TimeSpan.TicksPerSecond;
+        public static float SecondsPerFrame = 1f / 60f;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
@@ -48,24 +43,27 @@ namespace ThermalOverhaul
             cfg = Settings.GetDefaults();
 
             // set the system to do one full update
-            ActiveTime = cfg.ActiveTime;
-            IdleTime = cfg.IdleTime;
+            ActiveTime = cfg.ActiveTimeStep;
+            IdleTime = cfg.IdleTimeStep;
 
             All = new Dictionary<int, ThermalCell>();
             Active = new Dictionary<int, ThermalCell>();
             Idle = new Dictionary<int, ThermalCell>();
 
-            queue = new Queue<ThermalCell>();
+            activeQueue = new Queue<ThermalCell>();
+            idleQueue = new Queue<ThermalCell>();
 
             Grid.OnBlockAdded += BlockAdded;
             Grid.OnBlockRemoved += BlockRemoved;
 
-            
-
-            LastRunTimestamp = DateTime.UtcNow.Ticks;
-
-            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
+
+		public override void UpdateOnceBeforeFrame()
+		{
+            if (Grid.Physics == null)
+                NeedsUpdate = MyEntityUpdateEnum.NONE;   
+		}
 
         public ThermalCell GetCellThermals(Vector3I position) {
             int id = ThermalCell.GetId(position);
@@ -136,7 +134,7 @@ namespace ThermalOverhaul
                         }
 
                         All.Add(cell.Id, cell);
-                        Updateneighbors(cell.Id);
+                        AddNeighbors(cell.Id, position);
 
                         // calculate temperature
                         float temp = 0;
@@ -155,15 +153,13 @@ namespace ThermalOverhaul
                         if (cell.Properties.HeatGeneration != 0)
                         {
                             Active.Add(cell.Id, cell);
-                            cell.State = CellState.Active;
                         }
                         else
                         {
                             Idle.Add(cell.Id, cell);
-                            cell.State = CellState.Idle;
                         }
 
-                        MyLog.Default.Info($"[{Settings.Name}] Cell Added: {cell.Id} [{x}, {y}, {z}] {cell.State} {cell.Temperature}, {cell.LastHeatTransfer}");
+                        MyLog.Default.Info($"[{Settings.Name}] Cell Added: {cell.Id} [{x}, {y}, {z}] {cell.Temperature}, {cell.LastTransferRate}");
                     }
                 }
             }
@@ -179,7 +175,7 @@ namespace ThermalOverhaul
                     for (int z = b.Min.Z; z <= b.Max.Z; z++)
                     {
                         int id = ThermalCell.GetId(x,y,z);
-                        Updateneighbors(id, true);
+                        RemoveNeighbors(id);
                         
                         All.Remove(id);
 
@@ -198,79 +194,65 @@ namespace ThermalOverhaul
         }
 
         public void UpdateActivity() {
-            ThermalCell cell;
-            while (queue.TryDequeue(out cell))
-            {
-                //MyLog.Default.Info($"[{Settings.Name}] State Transfer: {cell.Id} last: {cell.LastHeatTransfer.ToString("n5")} {All.ContainsKey(cell.Id)} {Active.ContainsKey(cell.Id)} {Idle.ContainsKey(cell.Id)}");
+            //MyLog.Default.Info($"[{Settings.Name}] State Transfer: {cell.Id} last: {cell.LastHeatTransfer.ToString("n5")} {All.ContainsKey(cell.Id)} {Active.ContainsKey(cell.Id)} {Idle.ContainsKey(cell.Id)}");
 
-                if (cell.LastHeatTransfer > cfg.TemperatureActivationThreshold)
-                {
-                    if (cell.State == CellState.Idle)
-                    {
-                        cell.State = CellState.Active;
-                        Active.Add(cell.Id, cell);
-                        Idle.Remove(cell.Id);
-                    }
-                }
-                else
-                {
-                    if (cell.State == CellState.Active)
-                    {
-                        cell.State = CellState.Idle;
-                        Idle.Add(cell.Id, cell);
-                        Active.Remove(cell.Id);
-                    }
-                }
+            while (activeQueue.Count > 0)
+            {
+                ThermalCell cell = activeQueue.Dequeue();
+                Active.Add(cell.Id, cell);
+                Idle.Remove(cell.Id);
+            }
+
+            while (idleQueue.Count > 0)
+            {
+                ThermalCell cell = idleQueue.Dequeue();
+                Idle.Add(cell.Id, cell);
+                Active.Remove(cell.Id);
             }
         }
 
 		public override void UpdateBeforeSimulation()
 		{
-            // calculate delta time
-            long now = DateTime.UtcNow.Ticks;
-            DeltaTime = (now - LastRunTimestamp) * ToSeconds;
-            ActiveTime += DeltaTime;
-            IdleTime += DeltaTime;
-            LastRunTimestamp = now;
+            ActiveTime += SecondsPerFrame;
+            IdleTime += SecondsPerFrame;
+
+            //MyAPIGateway.Utilities.ShowNotification($"[Sim] {ActiveTime >= cfg.ActiveTimeStep} {(int)Math.Floor(ActiveTime * cfg.IterationTimeStep)}", 1, "White");
 
             UpdateActivity();
 
-            if (ActiveTime >= cfg.ActiveTime)
-            {
-                UpdateTemperatures(ref Active, ActiveTime);
-                ActiveTime -= (cfg.ActiveTime < DeltaTime) ? DeltaTime : cfg.ActiveTime;
-            }
 
-            if (IdleTime >= cfg.IdleTime)
+            if (ActiveTime >= cfg.ActiveTimeStep)
             {
-                UpdateTemperatures(ref Idle, IdleTime);
-                IdleTime -= (cfg.IdleTime < DeltaTime) ? DeltaTime : cfg.IdleTime;
-            }
+                float dt = Math.Min(1f, ActiveTime);
 
-		}
+                UpdateTemperatures(ref Active, dt, true);
+                ActiveTime -= cfg.ActiveTimeStep;
+			}
+
+			if (IdleTime >= cfg.IdleTimeStep)
+			{
+                float dt = Math.Min(1f, IdleTime);
+
+                UpdateTemperatures(ref Idle, dt, false);
+                IdleTime -= cfg.IdleTimeStep;
+			}
+        }
 
 		/// <summary>
 		/// Update the temperature of each cell in the grid
 		/// </summary>
-		private void UpdateTemperatures(ref Dictionary<int, ThermalCell> thermals, float deltaTime)
+		private void UpdateTemperatures(ref Dictionary<int, ThermalCell> thermals, float deltaTime, bool isActive)
         {
-
-
-            if (TestCycles < 1000)
+            foreach (ThermalCell cell in thermals.Values)
             {
-                TestCycles++;
-            }
+                cell.Temperature += cell.TemperatureGeneration * deltaTime;
 
-			foreach (ThermalCell cell in thermals.Values)
-            {
-                if (TestCycles < 1000)
-                {
-                    cell.Temperature += cell.TemperatureGeneration * deltaTime;
-                }   
-
+                float kA = cell.Properties.Conductivity * cell.CrossSectionalArea;
+                float t = cell.Temperature;
 
                 // Calculate the total heat gained or lost by the cell
                 float heat = 0;
+                float rates = cell.LastTransferRate;
                 foreach (ThermalCell neighbor in cell.neighbors)
                 {
                     if (neighbor == null)
@@ -279,161 +261,128 @@ namespace ThermalOverhaul
                         continue;
                     }
 
-                    heat += CalculateHeatTransfer(neighbor, cell);
+                    // the full formula is: k * A * (dT/dX)
+                    // since this calculation only spreads in cardinal direction the value of dX will always be 1
+                    heat += kA * (neighbor.Temperature - t) * 0.5f;
+                    rates += neighbor.LastTransferRate;
                 }
+                cell.ActivationRate = rates;
 
+                float rate = heat * cell.HeatCapacityRatio;
 
-                cell.LastHeatTransfer = heat * cell.HeatCapacityRatio;
                 // Update the temperature of the cell based on the total heat gained or lost
-                cell.Temperature += cell.LastHeatTransfer * deltaTime;
+                cell.Temperature += rate * deltaTime;
+                cell.LastTransferRate = Math.Abs(rate);
 
-                if (StateChanged(cell))
+                
+                if (isActive && cell.Properties.HeatGeneration == 0 && cell.ActivationRate <= cfg.IdleThreshold)
                 {
-                    queue.Enqueue(cell);
+                    idleQueue.Enqueue(cell);
+                }
+                else if (!isActive && cell.ActivationRate >= cfg.ActiveThreshold)
+                {
+                    activeQueue.Enqueue(cell);
                 }
 
-                Color c = GetTemperatureColor(cell.Temperature);
-                cell.Block.CubeGrid.ColorBlocks(cell.Block.Min, cell.Block.Max, c.ColorToHSV());
+                if (Settings.Debug)
+                {
+                    Vector3 c = GetTemperatureColor(cell.Temperature, !isActive).ColorToHSV();
+                    if (cell.Block.ColorMaskHSV != c)
+                    {
+                        cell.Block.CubeGrid.ColorBlocks(cell.Block.Min, cell.Block.Max, c);
+                    }
+                }
             }
         }
 
-        public bool StateChanged(ThermalCell cell) {
-            return cell.Properties.HeatGeneration == 0 && // state should remain active if the block generates heat
-                (cell.LastHeatTransfer >= cfg.TemperatureActivationThreshold && cell.State == CellState.Idle ||
-                cell.LastHeatTransfer < cfg.TemperatureActivationThreshold && cell.State == CellState.Active);
-        }
-
         /// <summary>
-        /// Calculate the heat transfer between two cells
+        /// Removes this cell from neighboring cells
         /// </summary>
-        /// <param name="cell1"></param>
-        /// <param name="cell2"></param>
-        /// <returns></returns>
-        private float CalculateHeatTransfer(ThermalCell cell1, ThermalCell cell2)
-        {
-            float k = cell1.Properties.Conductivity;
-            float A = cell1.CrossSectionalArea;
-            float dT = cell1.Temperature - cell2.Temperature;
+        /// <param name="id"></param>
+        private void RemoveNeighbors(int id) {
+            ThermalCell cell = All[id];
 
-            // the full formula is: k * A * (dT/dX)
-            // since this calculation only spreads in cardinal direction the value of dX will always be 1
-            return k * A * dT;
+            for (int i = 0; i < 6; i++)
+            {
+                ThermalCell n = cell.neighbors[i];
+                if (n == null)
+                    continue;
+
+                if (i < 5 && n.neighbors[i + 1] == cell)
+                {
+                    n.neighbors[i + 1] = null;
+                }
+                else if (i > 0 && n.neighbors[i - 1] == cell)
+                {
+                    n.neighbors[i - 1] = null;
+                }
+            }
         }
 
         /// <summary>
-        /// Update the current cell and all neibouring cells
+        /// Adds neighbors to this cell and to the neighbor cells
         /// </summary>
         /// <param name="cell"></param>
         /// <param name="p"></param>
-        /// <param name="remove"></param>
-        private void Updateneighbors(int id, bool remove = false)
+        private void AddNeighbors(int id, Vector3I p)
         {
             if (!All.ContainsKey(id))
                 return;
 
             ThermalCell cell = All[id];
-            Vector3I p = cell.Block.Position;
+
 			cell.neighbors = new ThermalCell[] { null, null, null, null, null, null };
 
-			ThermalCell c = null;
+			ThermalCell c;
             if (All.TryGetValue(ThermalCell.GetId(p.X - 1, p.Y, p.Z), out c))
             {
-                if (!remove)
-                {
-                    cell.neighbors[0] = c;
-                    c.neighbors[1] = cell;
-                }
-                else
-                {
-                    c.neighbors[1] = null;
-                }
+                cell.neighbors[0] = c;
+                c.neighbors[1] = cell;
             }
 
             if (All.TryGetValue(ThermalCell.GetId(p.X + 1, p.Y, p.Z), out c))
             {
-                if (!remove)
-                {
-                    cell.neighbors[1] = c;
-                    c.neighbors[0] = cell;
-                }
-                else
-                {
-                    c.neighbors[0] = null;
-                }
+                cell.neighbors[1] = c;
+                c.neighbors[0] = cell;
             }
 
             if (All.TryGetValue(ThermalCell.GetId(p.X, p.Y - 1, p.Z), out c))
             {
-                if (!remove)
-                {
-                    cell.neighbors[2] = c;
-                    c.neighbors[3] = cell;
-                }
-                else
-                {
-                    c.neighbors[3] = null;
-                }
-
+                cell.neighbors[2] = c;
+                c.neighbors[3] = cell;
             }
 
             if (All.TryGetValue(ThermalCell.GetId(p.X, p.Y + 1, p.Z), out c))
             {
-                if (!remove)
-                {
-                    cell.neighbors[3] = c;
-                    c.neighbors[2] = cell;
-                }
-                else
-                {
-                    c.neighbors[2] = null;
-                }
-
+                cell.neighbors[3] = c;
+                c.neighbors[2] = cell;
             }
 
             if (All.TryGetValue(ThermalCell.GetId(p.X, p.Y, p.Z - 1), out c))
             {
-                if (!remove)
-                {
-                    cell.neighbors[4] = c;
-                    c.neighbors[5] = cell;
-                }
-                else
-                {
-                    c.neighbors[5] = null;
-                }
-
+                cell.neighbors[4] = c;
+                c.neighbors[5] = cell;
             }
 
             if (All.TryGetValue(ThermalCell.GetId(p.X, p.Y, p.Z + 1), out c))
             {
-                if (!remove)
-                {
-                    cell.neighbors[5] = c;
-                    c.neighbors[4] = cell;
-                }
-                else
-                {
-                    c.neighbors[4] = null;
-                }
+                cell.neighbors[5] = c;
+                c.neighbors[4] = cell;
             }
         }
 
 
-
-        public Color GetTemperatureColor(float temp)
+        public Color GetTemperatureColor(float temp, bool isIdle)
         {
             float max = 100f;
             // Clamp the temperature to the range 0-100
             float t = Math.Max(0, Math.Min(max, temp));
 
-
-
             // Calculate the red and blue values using a linear scale
             float red = (t / max);
-
             float blue =  (1f - (t / max));
 
-            return new Color(red, 0, blue, 0);
+            return new Color(red, (isIdle? 1 : 0), blue);
         }
     }
 

@@ -11,8 +11,6 @@ namespace ThermalOverhaul
 		public int Id;
 		public IMySlimBlock Block;
 		public BlockProperties Properties;
-		public float LastHeatTransfer = 0;
-		public CellState State = CellState.Idle;
 
 		public float Mass;
 
@@ -20,6 +18,9 @@ namespace ThermalOverhaul
 		public float TemperatureGeneration; // degrees per second
 		public float CrossSectionalArea;
 		public float HeatCapacityRatio;
+
+		public float LastTransferRate = 0;
+		public float ActivationRate = 0;
 
 		public ThermalCell[] neighbors;
 
@@ -55,7 +56,7 @@ namespace ThermalOverhaul
 		}
 
 		public static int GetId(int x, int y, int z) { 
-            return (x * 1000) + y + (z * 1000000);
+            return x + (y * 1000) + (z * 1000000);
 		}
 
 	}

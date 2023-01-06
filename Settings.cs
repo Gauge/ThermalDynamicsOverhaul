@@ -14,6 +14,7 @@ namespace ThermalOverhaul
 	{
 		public const string Filename = "ThermalOverhaulConfig.cfg";
 		public const string Name = "Thermal Overhaul";
+		public const bool Debug = true;
 
 		[ProtoMember(1)]
 		public int Version;
@@ -21,21 +22,26 @@ namespace ThermalOverhaul
 		/// <summary>
 		/// The temperature differnece at which a block will move from active to idle
 		/// </summary>
-		[ProtoMember(10)]
-		public float TemperatureActivationThreshold;
+		[ProtoMember(5)]
+		public float ActiveThreshold;
 
 		/// <summary>
-		/// The update interval of active blocks in seconds
+		/// The temperature differnece at which a block will move from active to idle
+		/// </summary>
+		[ProtoMember(6)]
+		public float IdleThreshold;
+
+		/// <summary>
+		/// The frequecy that active blocks are updated
 		/// </summary>
 		[ProtoMember(11)]
-		public float ActiveTime;
+		public float ActiveTimeStep;
 
 		/// <summary>
-		/// The update interval of idle blocks in seconds
+		/// The frequecy that Idle blocks are updated
 		/// </summary>
 		[ProtoMember(12)]
-		public float IdleTime;
-
+		public float IdleTimeStep;
 
 		[ProtoMember(80)]
 		public BlockProperties Vacuum;
@@ -48,11 +54,12 @@ namespace ThermalOverhaul
 
 		public static Settings GetDefaults()
 		{
-			return new Settings {
+			Settings s = new Settings {
 				Version = 1,
-				TemperatureActivationThreshold = 0.01f,
-				ActiveTime = 0f,
-				IdleTime = 1f,
+				ActiveThreshold = 0.02f,
+				IdleThreshold = 0.01f,
+				ActiveTimeStep = 1f,
+				IdleTimeStep = 10f,
 				Vacuum = new BlockProperties {
 					Type = "Vaccum",
 					Conductivity = 0f,
@@ -62,27 +69,44 @@ namespace ThermalOverhaul
 
 				Generic = new BlockProperties {
 					Type = "Generic",
-					Conductivity = 80f,
-					HeatCapacity = 450f,
+					Conductivity = 1000f,
+					HeatCapacity = 100f,
 					HeatGeneration = 0f,
 				},
 
 				BlockConfig = new List<BlockProperties>() {
 					new BlockProperties { 
 						Type = "MyObjectBuilder_Reactor",
-						Conductivity = 80f,
-						HeatCapacity = 450f,
+						Conductivity = 1000f,
+						HeatCapacity = 400f,
 						HeatGeneration = 10000f,
 					},
 
 					new BlockProperties {
 						Type = "MyObjectBuilder_ConveyorConnector",
-						Conductivity = 600f,
-						HeatCapacity = 100f,
+						Conductivity = 1000f,
+						HeatCapacity = 50f,
 						HeatGeneration = 0f,
 					},
 				},
 			};
+
+			s.Init();
+			return s;
+			
+		}
+
+		private void Init() {
+
+			if (ActiveTimeStep < ThermalGrid.SecondsPerFrame)
+			{
+				ActiveTimeStep = ThermalGrid.SecondsPerFrame;
+			}
+
+			if (IdleTimeStep < ThermalGrid.SecondsPerFrame)
+			{
+				IdleTimeStep = ThermalGrid.SecondsPerFrame;
+			}
 		}
 
 		public static Settings Load()
@@ -119,6 +143,7 @@ namespace ThermalOverhaul
 				Save(settings);
 			}
 
+			settings.Init();
 			return settings;
 		}
 
