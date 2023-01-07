@@ -16,32 +16,24 @@ namespace ThermalOverhaul
 		public const string Name = "Thermal Overhaul";
 		public const bool Debug = true;
 
+		public const float SecondsPerFrame = 1f / 60f;
+
+		public static Settings Instance;
+
 		[ProtoMember(1)]
 		public int Version;
 
 		/// <summary>
-		/// The temperature differnece at which a block will move from active to idle
+		/// The frequency with which the system updates 
 		/// </summary>
-		[ProtoMember(5)]
-		public float ActiveThreshold;
+		[ProtoMember(10)]
+		public int Frequency;
 
 		/// <summary>
-		/// The temperature differnece at which a block will move from active to idle
+		/// Used to adjust values that are are calculated in seconds, to the current time scale 
 		/// </summary>
-		[ProtoMember(6)]
-		public float IdleThreshold;
-
-		/// <summary>
-		/// The frequecy that active blocks are updated
-		/// </summary>
-		[ProtoMember(11)]
-		public float ActiveTimeStep;
-
-		/// <summary>
-		/// The frequecy that Idle blocks are updated
-		/// </summary>
-		[ProtoMember(12)]
-		public float IdleTimeStep;
+		[XmlIgnore]
+		public float TimeScaleRatio;
 
 		[ProtoMember(80)]
 		public BlockProperties Vacuum;
@@ -56,10 +48,7 @@ namespace ThermalOverhaul
 		{
 			Settings s = new Settings {
 				Version = 1,
-				ActiveThreshold = 0.02f,
-				IdleThreshold = 0.01f,
-				ActiveTimeStep = 1f,
-				IdleTimeStep = 10f,
+				Frequency = 60,
 				Vacuum = new BlockProperties {
 					Type = "Vaccum",
 					Conductivity = 0f,
@@ -69,7 +58,7 @@ namespace ThermalOverhaul
 
 				Generic = new BlockProperties {
 					Type = "Generic",
-					Conductivity = 1000f,
+					Conductivity = 80f,
 					HeatCapacity = 100f,
 					HeatGeneration = 0f,
 				},
@@ -77,9 +66,9 @@ namespace ThermalOverhaul
 				BlockConfig = new List<BlockProperties>() {
 					new BlockProperties { 
 						Type = "MyObjectBuilder_Reactor",
-						Conductivity = 1000f,
-						HeatCapacity = 400f,
-						HeatGeneration = 10000f,
+						Conductivity = 80f,
+						HeatCapacity = 100f,
+						HeatGeneration = 10000000000f,
 					},
 
 					new BlockProperties {
@@ -98,15 +87,10 @@ namespace ThermalOverhaul
 
 		private void Init() {
 
-			if (ActiveTimeStep < ThermalGrid.SecondsPerFrame)
-			{
-				ActiveTimeStep = ThermalGrid.SecondsPerFrame;
-			}
+			if (Frequency < 1)
+				Frequency = 1;
 
-			if (IdleTimeStep < ThermalGrid.SecondsPerFrame)
-			{
-				IdleTimeStep = ThermalGrid.SecondsPerFrame;
-			}
+			TimeScaleRatio = Frequency / 60f;
 		}
 
 		public static Settings Load()

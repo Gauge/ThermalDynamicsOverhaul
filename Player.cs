@@ -15,8 +15,9 @@ namespace ThermalOverhaul
 	{
 		public override void Simulate()
 		{
-			if (!MyAPIGateway.Utilities.IsDedicated)
+			if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated)
 			{
+				//MyAPIGateway.Utilities.ShowNotification($"[Grid] Frequency: {Settings.Instance.Frequency}", 1, "White");
 				MatrixD matrix = MyAPIGateway.Session.Camera.WorldMatrix;
 				Vector3D start = matrix.Translation;
 				Vector3D end = start + (matrix.Forward * 100);
@@ -32,9 +33,10 @@ namespace ThermalOverhaul
 
 				ThermalCell cell = tGrid.GetCellThermals(position);
 
-				MyAPIGateway.Utilities.ShowNotification($"[Grid] All {tGrid.All.Count} Active {tGrid.Active.Count} Idle {tGrid.Idle.Count}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Properties.Type} Mass: {cell.Mass} Temp: {cell.Temperature.ToString("n3")} Rate: {cell.LastTransferRate.ToString("n6")}", 1, "White");
-				//MyAPIGateway.Utilities.ShowNotification($"[Cell] {(cell.neighbors[0] != null ? $"Left ({cell.neighbors[0].Id})" : "")} {(cell.neighbors[1] != null ? $"Right ({cell.neighbors[1].Id})" : "")} {(cell.neighbors[2] != null ? $"Up ({cell.neighbors[2].Id})" : "")} {(cell.neighbors[3] != null ? $"Down ({cell.neighbors[3].Id})" : "")} {(cell.neighbors[4] != null ? $"Front ({cell.neighbors[4].Id})" : "")} {(cell.neighbors[5] != null ? $"Back ({cell.neighbors[5].Id})" : "")}", 1, "White");
+				if (cell == null)
+					return;
+				MyAPIGateway.Utilities.ShowNotification($"[Grid] Cell Count {tGrid.Thermals.Count}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} Temp: {cell.Temperature.ToString("n4")} LastH: {cell.LastHeat.ToString("n3")} hRatio: {cell.HeatCapacityRatio} Neighbors: {cell.Neighbors.Count}", 1, "White");
 			}
 		}
 	}
