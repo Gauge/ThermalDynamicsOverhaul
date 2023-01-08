@@ -48,7 +48,7 @@ namespace ThermalOverhaul
 		{
 			Settings s = new Settings {
 				Version = 1,
-				Frequency = 60,
+				Frequency = 1,
 				Vacuum = new BlockProperties {
 					Type = "Vaccum",
 					Conductivity = 0f,
@@ -59,24 +59,33 @@ namespace ThermalOverhaul
 				Generic = new BlockProperties {
 					Type = "Generic",
 					Conductivity = 80f,
-					HeatCapacity = 100f,
+					HeatCapacity = 450f,
 					HeatGeneration = 0f,
 				},
 
 				BlockConfig = new List<BlockProperties>() {
 					new BlockProperties { 
 						Type = "MyObjectBuilder_Reactor",
-						Conductivity = 80f,
-						HeatCapacity = 100f,
-						HeatGeneration = 10000000000f,
+						Conductivity = 9000f,
+						HeatCapacity = 450f,
+						HeatGeneration = 2500000000f,
 					},
 
 					new BlockProperties {
 						Type = "MyObjectBuilder_ConveyorConnector",
-						Conductivity = 1000f,
-						HeatCapacity = 50f,
+						Conductivity = 9400f,
+						HeatCapacity = 100f,
 						HeatGeneration = 0f,
 					},
+
+					new BlockProperties {
+						Type = "MyObjectBuilder_Conveyor",
+						Conductivity = 9400f,
+						HeatCapacity = 100f,
+						HeatGeneration = 0f,
+					},
+
+					
 				},
 			};
 

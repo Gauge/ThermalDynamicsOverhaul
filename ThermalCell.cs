@@ -10,8 +10,9 @@ namespace ThermalOverhaul
 		public float Temperature;
 		public float Generation;
 		public float HeatCapacityRatio;
+		public float NeighborCountRatio;
 		public float kA;
-		public float LastHeat;
+		public float LastDeltaTemp;
 
 
 		public IMySlimBlock Block;
@@ -19,12 +20,14 @@ namespace ThermalOverhaul
 
 		public void Init(BlockProperties p)
 		{
-			float gen = p.HeatGeneration * Settings.Instance.TimeScaleRatio;
-			float con = p.Conductivity * Settings.Instance.TimeScaleRatio;
+			float watts = p.HeatGeneration * Settings.Instance.TimeScaleRatio;
+			
+			float k = p.Conductivity * Settings.Instance.TimeScaleRatio;
+			float A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
 
-			Generation = ((p.HeatCapacity != 0) ? gen / p.HeatCapacity : 0);
+			Generation = ((p.HeatCapacity != 0) ? watts / p.HeatCapacity : 0);
 			HeatCapacityRatio = 1f / (Block.Mass * p.HeatCapacity);
-			kA = con * (Block.CubeGrid.GridSize * 2) * (Block.CubeGrid.GridSize * 2);
+			kA = k*A ;
 
 			// calculate melting point
 		}

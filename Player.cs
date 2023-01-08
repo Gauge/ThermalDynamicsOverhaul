@@ -36,7 +36,7 @@ namespace ThermalOverhaul
 				if (cell == null)
 					return;
 				MyAPIGateway.Utilities.ShowNotification($"[Grid] Cell Count {tGrid.Thermals.Count}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} Temp: {cell.Temperature.ToString("n4")} LastH: {cell.LastHeat.ToString("n3")} hRatio: {cell.HeatCapacityRatio} Neighbors: {cell.Neighbors.Count}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Neighbors: {cell.Neighbors.Count} ratio: {cell.HeatCapacityRatio}", 1, "White");
 			}
 		}
 	}

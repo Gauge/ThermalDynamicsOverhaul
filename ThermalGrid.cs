@@ -9,6 +9,7 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
+using VRage.Utils;
 using VRageMath;
 
 namespace ThermalOverhaul
@@ -63,7 +64,7 @@ namespace ThermalOverhaul
             BlockProperties group = null;
             BlockProperties block = null;
 
-            //MyLog.Default.Info($"[{Settings.Name}] Block Type: {bp.Type} {bp.HeatGeneration} {type} {bp.Type == type}");
+           
             foreach (BlockProperties bp in Settings.Instance.BlockConfig)
             {
                 if (bp.Type != type)
@@ -102,6 +103,8 @@ namespace ThermalOverhaul
             PositionToIndex.Add(b.Position, index);
             Thermals.list[index] = cell;
 
+            MyLog.Default.Info($"[{Settings.Name}] Added {b.Position} Index: {index} {type}/{subtype}");
+
             CountPerFrame = GetCountPerFrame();
         }
 
@@ -131,6 +134,7 @@ namespace ThermalOverhaul
             List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
             cell.Block.GetNeighbours(neighbors);
 
+            //MyLog.Default.Info($"[{Settings.Name}] cell: {cell.Block.Position}, neighbors new: {neighbors.Count}  existing: {cell.Neighbors.Count}");
             for (int i = 0; i < neighbors.Count; i++)
             {
                 IMySlimBlock n = neighbors[i];
@@ -138,7 +142,10 @@ namespace ThermalOverhaul
 
                 cell.Neighbors.Add(ncell);
                 ncell.Neighbors.Add(cell);
+                ncell.NeighborCountRatio = (ncell.Neighbors.Count == 0) ? 0 : 1f / ncell.Neighbors.Count;
             }
+
+            cell.NeighborCountRatio = (cell.Neighbors.Count == 0) ? 0 : 1f / cell.Neighbors.Count;
         }
 
 
@@ -159,7 +166,7 @@ namespace ThermalOverhaul
             //MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
             while (IterationIndex < target)
             {
-                ThermalCell cell = Thermals.list[(LoopDirection) ? IterationIndex : count-IterationIndex-1];
+                ThermalCell cell = Thermals.list[(LoopDirection) ? IterationIndex : count-1-IterationIndex];
                 if (cell != null)
                 {
                     UpdateTemperatures(ref cell);
@@ -194,16 +201,17 @@ namespace ThermalOverhaul
             float heat = 0;
             for (int i = 0; i < cell.Neighbors.Count; i++)
             {
-                // k * A * (dT / dX)
-                heat += cell.kA * (cell.Neighbors[i].Temperature - cell.Temperature) * 0.5f;
-
+                ThermalCell ncell = cell.Neighbors[i];
+                heat += ncell.Temperature - cell.Temperature;
             }
 
-            cell.Temperature += heat * cell.HeatCapacityRatio;            
+            // k * A * (dT / dX)
+            //cell.LastDeltaTemp = cell.kA * (heat * cell.NeighborCountRatio) * cell.HeatCapacityRatio;
+            cell.LastDeltaTemp = cell.kA * heat * cell.HeatCapacityRatio;
+            cell.Temperature += cell.LastDeltaTemp;
 
-			if (Settings.Debug)
+            if (Settings.Debug)
 			{
-                cell.LastHeat = heat * cell.HeatCapacityRatio;
                 Vector3 c = GetTemperatureColor(cell.Temperature).ColorToHSV();
 				if (cell.Block.ColorMaskHSV != c)
 				{
@@ -233,12 +241,8 @@ namespace ThermalOverhaul
             float red = (t / max);
             float blue =  (1f - (t / max));
 
-            return new Color(red, (LoopDirection ? 0 : 1), blue);
+            return new Color(red, (!LoopDirection && Settings.Instance.Frequency >= 60 ? 1 : 0), blue);
         }
-
-
-
-
     }
 
 }
