@@ -44,7 +44,7 @@ namespace ThermalOverhaul
             Grid.OnBlockAdded += BlockAdded;
             Grid.OnBlockRemoved += BlockRemoved;
 
-            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
 		public override void UpdateOnceBeforeFrame()
@@ -98,6 +98,15 @@ namespace ThermalOverhaul
                 cell.Init(Settings.Instance.Generic);
             }
 
+            IMyCubeBlock fat = b.FatBlock;
+            if (fat is IMyPistonBase)
+            {
+                (fat as IMyPistonBase).AttachedEntityChanged += gridGroupChanged;
+            }
+            else if (fat is IMyMotorBase)
+            {
+                (fat as IMyMotorBase).AttachedEntityChanged += gridGroupChanged;
+            }
 
             int index = Thermals.Allocate();
             PositionToIndex.Add(b.Position, index);
@@ -110,18 +119,68 @@ namespace ThermalOverhaul
 
         private void BlockRemoved(IMySlimBlock b)
         {
+            IMyCubeBlock fat = b.FatBlock;
+            if (fat is IMyPistonBase)
+            {
+                (fat as IMyPistonBase).AttachedEntityChanged -= gridGroupChanged;
+            }
+            else if (fat is IMyMotorBase)
+            {
+                (fat as IMyMotorBase).AttachedEntityChanged -= gridGroupChanged;
+            }
+
             int index = PositionToIndex[b.Position];
             ThermalCell cell = Thermals.list[index];
 
             for (int i = 0; i < cell.Neighbors.Count; i++)
             {
-                cell.Neighbors[i].Neighbors.Remove(cell);
+                cell.Neighbors[i].RemoveNeighbor(cell);
+
+                //cell.Neighbors[i].Neighbors.Remove(cell);
             }
 
             PositionToIndex.Remove(b.Position);
             Thermals.Free(index);
 
             CountPerFrame = GetCountPerFrame();
+
+
+        }
+
+        private void gridGroupChanged(IMyMechanicalConnectionBlock block)
+        {
+            int index = PositionToIndex[block.Position];
+            ThermalCell cell = Thermals.list[index];
+
+            MyLog.Default.Info($"[{Settings.Name}] {block.Position} IsAttached: {block.IsAttached} DoubleCheck: {block.Top != null}");
+
+            if (block.Top == null)
+            {
+                for (int i = 0; i < cell.Neighbors.Count; i++)
+                {
+                    ThermalCell ncell = cell.Neighbors[i];
+
+                    if (ncell.Block.CubeGrid != cell.Block.CubeGrid)
+                    {
+                        MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
+                        
+                        ncell.Neighbors.Remove(cell);
+                        cell.Neighbors.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+
+                ThermalGrid g = block.Top.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+                ThermalCell ncell = g.GetCellThermals(block.Top.Position);
+
+                MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
+
+                cell.Neighbors.Add(ncell);
+                ncell.Neighbors.Add(cell);
+            }
         }
 
         public int GetCountPerFrame() {
@@ -134,18 +193,22 @@ namespace ThermalOverhaul
             List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
             cell.Block.GetNeighbours(neighbors);
 
+
             //MyLog.Default.Info($"[{Settings.Name}] cell: {cell.Block.Position}, neighbors new: {neighbors.Count}  existing: {cell.Neighbors.Count}");
             for (int i = 0; i < neighbors.Count; i++)
             {
                 IMySlimBlock n = neighbors[i];
                 ThermalCell ncell = Thermals.list[PositionToIndex[n.Position]];
 
-                cell.Neighbors.Add(ncell);
-                ncell.Neighbors.Add(cell);
-                ncell.NeighborCountRatio = (ncell.Neighbors.Count == 0) ? 0 : 1f / ncell.Neighbors.Count;
+                cell.AddNeighbor(ncell);
+                ncell.AddNeighbor(cell);
+
+                //cell.Neighbors.Add(ncell);
+                //ncell.Neighbors.Add(cell);
+                //ncell.NeighborCountRatio = (ncell.Neighbors.Count == 0) ? 0 : 1f / ncell.Neighbors.Count;
             }
 
-            cell.NeighborCountRatio = (cell.Neighbors.Count == 0) ? 0 : 1f / cell.Neighbors.Count;
+            //cell.NeighborCountRatio = (cell.Neighbors.Count == 0) ? 0 : 1f / cell.Neighbors.Count;
         }
 
 
@@ -183,11 +246,7 @@ namespace ThermalOverhaul
             }
         }
 
-        private void UpdateAttachedGrids() 
-        {
-            //List<IMyCubeGrid> subgrids = new List<IMyCubeGrid>();
-            //MyAPIGateway.GridGroups.GetGroup(hitGrid, GridLinkTypeEnum.Mechanical, subgrids);
-        }
+ 
 
 
 		/// <summary>
@@ -207,8 +266,10 @@ namespace ThermalOverhaul
 
             // k * A * (dT / dX)
             //cell.LastDeltaTemp = cell.kA * (heat * cell.NeighborCountRatio) * cell.HeatCapacityRatio;
-            cell.LastDeltaTemp = cell.kA * heat * cell.HeatCapacityRatio;
-            cell.Temperature += cell.LastDeltaTemp;
+
+            float cool = Settings.Instance.VaccumDrainRate * cell.ExposedSurfaceArea * cell.HeatCapacityRatio;
+            cell.LastDeltaTemp = cell.kA * (heat - cool) * cell.HeatCapacityRatio;
+            cell.Temperature = Math.Max(0, cell.Temperature+cell.LastDeltaTemp);
 
             if (Settings.Debug)
 			{

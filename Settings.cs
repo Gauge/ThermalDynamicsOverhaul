@@ -30,13 +30,16 @@ namespace ThermalOverhaul
 		public int Frequency;
 
 		/// <summary>
+		/// The drain rate in watts per cubic meter of exposed surface
+		/// </summary>
+		[ProtoMember(50)]
+		public float VaccumDrainRate;
+
+		/// <summary>
 		/// Used to adjust values that are are calculated in seconds, to the current time scale 
 		/// </summary>
 		[XmlIgnore]
 		public float TimeScaleRatio;
-
-		[ProtoMember(80)]
-		public BlockProperties Vacuum;
 
 		[ProtoMember(81)]
 		public BlockProperties Generic;
@@ -49,16 +52,11 @@ namespace ThermalOverhaul
 			Settings s = new Settings {
 				Version = 1,
 				Frequency = 1,
-				Vacuum = new BlockProperties {
-					Type = "Vaccum",
-					Conductivity = 0f,
-					HeatCapacity = 0f,
-					HeatGeneration = 0f,
-				},
+				VaccumDrainRate = 100000,
 
 				Generic = new BlockProperties {
 					Type = "Generic",
-					Conductivity = 80f,
+					Conductivity = 7000f,
 					HeatCapacity = 450f,
 					HeatGeneration = 0f,
 				},
@@ -68,7 +66,7 @@ namespace ThermalOverhaul
 						Type = "MyObjectBuilder_Reactor",
 						Conductivity = 9000f,
 						HeatCapacity = 450f,
-						HeatGeneration = 2500000000f,
+						HeatGeneration = 250000000000f,
 					},
 
 					new BlockProperties {
