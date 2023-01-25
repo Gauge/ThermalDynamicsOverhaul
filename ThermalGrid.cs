@@ -167,6 +167,10 @@ namespace ThermalOverhaul
 			{
 				(fat as IMyMotorBase).AttachedEntityChanged += GridGroupChanged;
 			}
+			else if (fat is IMyDoor)
+			{ 
+				(fat as IMyDoor).DoorStateChanged += (state) => ExternalBlockReset();
+			}
 
 			int index = Thermals.Allocate();
 			PositionToIndex.Add(b.Position, index);
