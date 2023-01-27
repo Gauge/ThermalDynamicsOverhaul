@@ -1,6 +1,7 @@
 ﻿using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
+using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -141,7 +142,7 @@ namespace ThermalOverhaul
 			ThermalCell cell = new ThermalCell();
 			cell.Block = b;
 
-			AddNeighbors(cell);
+			cell.AssignNeighbors();
 
 			if (block != null)
 			{
@@ -156,8 +157,6 @@ namespace ThermalOverhaul
 				cell.Init(Settings.Instance.Generic);
 			}
 
-			//ProcessCell(ref cell);
-
 			IMyCubeBlock fat = b.FatBlock;
 			if (fat is IMyPistonBase)
 			{
@@ -167,8 +166,63 @@ namespace ThermalOverhaul
 			{
 				(fat as IMyMotorBase).AttachedEntityChanged += GridGroupChanged;
 			}
+			else if (fat is IMyLandingGear)
+			{
+				// had to use this crappy method because the better method is broken
+				// KEEN!!! fix your code please!
+				IMyLandingGear gear = (fat as IMyLandingGear);
+				gear.StateChanged += (state) => {
+					IMyEntity entity = gear.GetAttachedEntity();
+					ThermalCell c = GetCellThermals(gear.Position);
+
+					// if the entity is not MyCubeGrid reset landing gear neighbors because we probably detached
+					if (!(entity is MyCubeGrid))
+					{
+						c.ResetNeighbors();
+						return;
+					}
+
+					// get the search area
+					MyCubeGrid grid = entity as MyCubeGrid;
+					ThermalGrid gtherms = grid.GameLogic.GetAs<ThermalGrid>();
+
+					Vector3D oldMin = gear.CubeGrid.GridIntegerToWorld(new Vector3I(gear.Min.X, gear.Min.Y, gear.Min.Z));
+					Vector3D oldMax = gear.CubeGrid.GridIntegerToWorld(new Vector3I(gear.Max.X, gear.Max.Y, gear.Min.Z));
+
+					oldMax += gear.WorldMatrix.Down * (grid.GridSize + 0.2f);
+
+					Vector3I min = grid.WorldToGridInteger(oldMin);
+					Vector3I max = grid.WorldToGridInteger(oldMax);
+
+					MyLog.Default.Info($"[{Settings.Name}] min {min} max {max}");
+
+					// look for active cells on the other grid that are inside the search area
+					Vector3I temp = Vector3I.Zero;
+					for (int x = min.X; x <= max.X; x++)
+					{
+						temp.X = x;
+						for (int y = min.Y; y <= max.Y; y++)
+						{
+							temp.Y = y;
+							for (int z = min.Z; z <= max.Z; z++)
+							{
+								temp.Z = z;
+
+								ThermalCell ncell = gtherms.GetCellThermals(temp);
+								MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
+								if (ncell != null)
+								{
+									// connect the cells found
+									ncell.AddNeighbor(c);
+									c.AddNeighbor(ncell);
+								}
+							}
+						}
+					}
+				};
+			}
 			else if (fat is IMyDoor)
-			{ 
+			{
 				(fat as IMyDoor).DoorStateChanged += (state) => ExternalBlockReset();
 			}
 
@@ -193,14 +247,14 @@ namespace ThermalOverhaul
 			{
 				(fat as IMyMotorBase).AttachedEntityChanged -= GridGroupChanged;
 			}
+			else if (fat is IMyDoor)
+			{
+				(fat as IMyDoor).DoorStateChanged -= (state) => ExternalBlockReset();
+			}
 
 			int index = PositionToIndex[b.Position];
 			ThermalCell cell = Thermals.list[index];
-
-			for (int i = 0; i < cell.Neighbors.Count; i++)
-			{
-				cell.Neighbors[i].RemoveNeighbor(cell);
-			}
+			cell.ClearNeighbors();
 
 			PositionToIndex.Remove(b.Position);
 			Thermals.Free(index);
@@ -250,22 +304,6 @@ namespace ThermalOverhaul
 			return 1 + (Thermals.Count / Settings.Instance.Frequency);
 		}
 
-		public void AddNeighbors(ThermalCell cell)
-		{
-			//get a list of current neighbors from the grid
-			List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
-			cell.Block.GetNeighbours(neighbors);
-
-			for (int i = 0; i < neighbors.Count; i++)
-			{
-				IMySlimBlock n = neighbors[i];
-				ThermalCell ncell = Thermals.list[PositionToIndex[n.Position]];
-
-				cell.AddNeighbor(ncell);
-				ncell.AddNeighbor(cell);
-			}
-		}
-
 
 		/// <summary>
 		/// Update the temperature of each cell in the grid
@@ -291,7 +329,8 @@ namespace ThermalOverhaul
 
 			if (Settings.Debug)
 			{
-				Vector3 c = GetTemperatureColor(cell.ExposedSurfaceArea / cell.Block.CubeGrid.GridSize / cell.Block.CubeGrid.GridSize).ColorToHSV();
+				//Vector3 c = GetTemperatureColor(cell.ExposedSurfaceArea / cell.Block.CubeGrid.GridSize / cell.Block.CubeGrid.GridSize).ColorToHSV();
+				Vector3 c = GetTemperatureColor(cell.Temperature).ColorToHSV();
 				if (cell.Block.ColorMaskHSV != c)
 				{
 					cell.Block.CubeGrid.ColorBlocks(cell.Block.Min, cell.Block.Max, c);
@@ -313,7 +352,8 @@ namespace ThermalOverhaul
 
 		public Color GetTemperatureColor(float temp)
 		{
-			float max = 6f;
+			//float max = 6f;
+			float max = 100f;
 			// Clamp the temperature to the range 0-100
 			float t = Math.Max(0, Math.Min(max, temp));
 
@@ -357,7 +397,7 @@ namespace ThermalOverhaul
 			ExternalRoomUpdateComplete = false;
 		}
 
-		private void ExternalBlockCheck(Vector3I block) 
+		private void ExternalBlockCheck(Vector3I block)
 		{
 			//Vector3I block = blockQueue.Dequeue();
 			for (int i = 0; i < neighbors.Length; i++)
@@ -387,7 +427,7 @@ namespace ThermalOverhaul
 			if (current == target)
 			{
 				MyCubeBlockDefinition def = current.BlockDefinition as MyCubeBlockDefinition;
-				
+
 				if (def == null)
 					return false;
 
@@ -449,7 +489,7 @@ namespace ThermalOverhaul
 			result.TransposeRotationInPlace();
 			Vector3I transformedNormal = Vector3I.Round(Vector3.Transform(normal, result));
 			Vector3 position = Vector3.Zero;
-			
+
 			if (block.FatBlock != null)
 			{
 				position = pos - block.FatBlock.Position;

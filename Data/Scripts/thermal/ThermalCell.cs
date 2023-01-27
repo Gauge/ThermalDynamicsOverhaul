@@ -37,6 +37,37 @@ namespace ThermalOverhaul
 			// calculate melting point
 		}
 
+		public void ResetNeighbors() {
+			ClearNeighbors();
+			AssignNeighbors();
+		}
+
+		public void ClearNeighbors() 
+		{
+			for (int i = 0; i < Neighbors.Count; i++)
+			{
+				Neighbors[i].RemoveNeighbor(this);
+			}
+		}
+
+		public void AssignNeighbors()
+		{
+			//get a list of current neighbors from the grid
+			List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
+			Block.GetNeighbours(neighbors);
+
+			ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+
+			for (int i = 0; i < neighbors.Count; i++)
+			{
+				IMySlimBlock n = neighbors[i];
+				ThermalCell ncell = thermals.GetCellThermals(n.Position);
+
+				AddNeighbor(ncell);
+				ncell.AddNeighbor(this);
+			}
+		}
+
 		public void AddNeighbor(ThermalCell n) 
 		{
 			Neighbors.Add(n);
