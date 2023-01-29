@@ -21,14 +21,17 @@ namespace ThermalOverhaul
 		private MyCubeGrid Grid;
 		public Dictionary<Vector3I, int> PositionToIndex;
 		public MyFreeList<ThermalCell> Thermals;
+		//public Dictionary<Vector3I, ThermalCell> Rooms;
+
+		public GridMapper Mapper;
 
 		private int IterationFrames = 0;
 		private int IterationIndex = 0;
 		private int CountPerFrame = 0;
 		private bool LoopDirection = true;
 
-		private int ExternalCountPerFrame = 0;
-		public bool ExternalRoomUpdateComplete = false;
+		//private int ExternalCountPerFrame = 0;
+		//public bool ExternalRoomUpdateComplete = false;
 		public bool ThermalCellUpdateComplete = true;
 
 		public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -44,6 +47,9 @@ namespace ThermalOverhaul
 
 			PositionToIndex = new Dictionary<Vector3I, int>(Vector3I.Comparer);
 			Thermals = new MyFreeList<ThermalCell>();
+			//Rooms = new Dictionary<Vector3I, ThermalCell>();
+			Mapper = new GridMapper(Grid);
+
 
 			Grid.OnBlockAdded += BlockAdded;
 			Grid.OnBlockRemoved += BlockRemoved;
@@ -78,7 +84,7 @@ namespace ThermalOverhaul
 				{
 					if (!ThermalCellUpdateComplete)
 					{
-						cell.UpdateInsideBlocks(ref ExternalBlocks);
+						cell.UpdateInsideBlocks(ref Mapper.Blocks);
 					}
 
 					UpdateTemperatures(ref cell);
@@ -88,9 +94,9 @@ namespace ThermalOverhaul
 			}
 
 			int loopCount = 0;
-			while (blockQueue.Count > 0 && loopCount < ExternalCountPerFrame)
+			while (Mapper.BlockQueue.Count > 0 && loopCount < Mapper.ExternalCountPerFrame)
 			{
-				ExternalBlockCheck(blockQueue.Dequeue());
+				Mapper.ExternalBlockCheck(Mapper.BlockQueue.Dequeue());
 				loopCount++;
 			}
 
@@ -103,9 +109,10 @@ namespace ThermalOverhaul
 				if (!ThermalCellUpdateComplete)
 					ThermalCellUpdateComplete = true;
 
-				if (!ExternalRoomUpdateComplete && blockQueue.Count == 0)
+				if (!Mapper.ExternalRoomUpdateComplete && Mapper.BlockQueue.Count == 0)
 				{
-					ExternalRoomUpdateComplete = true;
+					//HandleRooms();
+					Mapper.ExternalRoomUpdateComplete = true;
 					ThermalCellUpdateComplete = false;
 				}
 
@@ -194,7 +201,7 @@ namespace ThermalOverhaul
 					Vector3I min = grid.WorldToGridInteger(oldMin);
 					Vector3I max = grid.WorldToGridInteger(oldMax);
 
-					MyLog.Default.Info($"[{Settings.Name}] min {min} max {max}");
+					//MyLog.Default.Info($"[{Settings.Name}] min {min} max {max}");
 
 					// look for active cells on the other grid that are inside the search area
 					Vector3I temp = Vector3I.Zero;
@@ -209,7 +216,7 @@ namespace ThermalOverhaul
 								temp.Z = z;
 
 								ThermalCell ncell = gtherms.GetCellThermals(temp);
-								MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
+								//MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
 								if (ncell != null)
 								{
 									// connect the cells found
@@ -223,17 +230,17 @@ namespace ThermalOverhaul
 			}
 			else if (fat is IMyDoor)
 			{
-				(fat as IMyDoor).DoorStateChanged += (state) => ExternalBlockReset();
+				(fat as IMyDoor).DoorStateChanged += (state) => Mapper.ExternalBlockReset();
 			}
 
 			int index = Thermals.Allocate();
 			PositionToIndex.Add(b.Position, index);
 			Thermals.list[index] = cell;
 
-			MyLog.Default.Info($"[{Settings.Name}] Added {b.Position} Index: {index} {type}/{subtype}");
+			//MyLog.Default.Info($"[{Settings.Name}] Added {b.Position} Index: {index} {type}/{subtype}");
 
 			CountPerFrame = GetCountPerFrame();
-			ExternalBlockReset();
+			Mapper.ExternalBlockReset();
 		}
 
 		private void BlockRemoved(IMySlimBlock b)
@@ -249,7 +256,7 @@ namespace ThermalOverhaul
 			}
 			else if (fat is IMyDoor)
 			{
-				(fat as IMyDoor).DoorStateChanged -= (state) => ExternalBlockReset();
+				(fat as IMyDoor).DoorStateChanged -= (state) => Mapper.ExternalBlockReset();
 			}
 
 			int index = PositionToIndex[b.Position];
@@ -260,7 +267,7 @@ namespace ThermalOverhaul
 			Thermals.Free(index);
 
 			CountPerFrame = GetCountPerFrame();
-			ExternalBlockReset();
+			Mapper.ExternalBlockReset();
 		}
 
 		private void GridGroupChanged(IMyMechanicalConnectionBlock block)
@@ -348,8 +355,6 @@ namespace ThermalOverhaul
 			return null;
 		}
 
-
-
 		public Color GetTemperatureColor(float temp)
 		{
 			//float max = 6f;
@@ -365,206 +370,25 @@ namespace ThermalOverhaul
 		}
 
 
-		private readonly Vector3I[] neighbors = new Vector3I[6]
-		{
-			new Vector3I(1, 0, 0),
-			new Vector3I(-1, 0, 0),
-			new Vector3I(0, 1, 0),
-			new Vector3I(0, -1, 0),
-			new Vector3I(0, 0, 1),
-			new Vector3I(0, 0, -1)
-		};
+		//private void HandleRooms() {
+		//	List<IMyOxygenRoom> rooms = new List<IMyOxygenRoom>();
+		//	(Grid as IMyCubeGrid).GasSystem.GetRooms(rooms);
 
-		public HashSet<Vector3I> ExternalBlocks = new HashSet<Vector3I>();
-		private Queue<Vector3I> blockQueue = new Queue<Vector3I>();
 
-		private Vector3I min;
-		private Vector3I max;
+		//	Dictionary<Vector3I, ThermalCell> newRooms = new Dictionary<Vector3I, ThermalCell>();
+		//	for (int i = 0; i < rooms.Count; i++)
+		//	{
+		//		IMyOxygenRoom r = rooms[i];
 
-		private void ExternalBlockReset()
-		{
-			min = Grid.Min - 1;
-			max = Grid.Max + 1;
+		//		if (Rooms.ContainsKey(r.StartingPosition))
+		//		{
+		//			ThermalCell c = Rooms[r.StartingPosition];
 
-			blockQueue.Clear();
-			blockQueue.Enqueue(min);
+		//		}
 
-			ExternalBlocks.Clear();
-			ExternalBlocks.Add(min);
-
-			ExternalCountPerFrame = Math.Max((int)((max - min).Size / 60f), 1);
-
-			ExternalRoomUpdateComplete = false;
-		}
-
-		private void ExternalBlockCheck(Vector3I block)
-		{
-			//Vector3I block = blockQueue.Dequeue();
-			for (int i = 0; i < neighbors.Length; i++)
-			{
-				Vector3I n = block + neighbors[i];
-
-				//MyLog.Default.Info($"[{Settings.Name}] Neighbor {n} OoB: {Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max} visited: {visitedBlocks.Contains(n)} airtight: {IsAirtightBetweenPositions(block, n)}");
-				if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || ExternalBlocks.Contains(n) || IsAirtightBetweenPositions(block, n))
-					continue;
-
-				ExternalBlocks.Add(n);
-				blockQueue.Enqueue(n);
-
-				//MyLog.Default.Info($"[{Settings.Name}] Queued: {n}");
-			}
-		}
-
-		private bool IsAirtightBetweenPositions(Vector3I start, Vector3I end)
-		{
-			// the the point being moved to is empty it is not air tight
-			IMySlimBlock target = Grid.GetCubeBlock(end);
-			if (target == null)
-				return false;
-
-			IMySlimBlock current = Grid.GetCubeBlock(start);
-			// verify that the block is fully built and airtight
-			if (current == target)
-			{
-				MyCubeBlockDefinition def = current.BlockDefinition as MyCubeBlockDefinition;
-
-				if (def == null)
-					return false;
-
-				if (def.BuildProgressModels != null && def.BuildProgressModels.Length != 0)
-				{
-					MyCubeBlockDefinition.BuildProgressModel buildProgressModel = def.BuildProgressModels[def.BuildProgressModels.Length - 1];
-					if (current.BuildLevelRatio < buildProgressModel.BuildRatioUpperBound)
-					{
-						return false;
-					}
-				}
-
-				return def.IsAirTight == true;
-
-			}
-
-			if (current != null && IsAirtightBlock(current, start, end - start))
-			{
-				return true;
-			}
-
-			return IsAirtightBlock(target, end, start - end);
-		}
-
-		private bool? IsAirtightFromDefinition(IMySlimBlock slim)
-		{
-			if (slim == null)
-				return false;
-
-			MyCubeBlockDefinition def = slim.BlockDefinition as MyCubeBlockDefinition;
-			if (def.BuildProgressModels != null && def.BuildProgressModels.Length != 0)
-			{
-				MyCubeBlockDefinition.BuildProgressModel buildProgressModel = def.BuildProgressModels[def.BuildProgressModels.Length - 1];
-				if (slim.BuildLevelRatio < buildProgressModel.BuildRatioUpperBound)
-				{
-					return false;
-				}
-			}
-
-			return def.IsAirTight;
-		}
-
-		private bool IsAirtightBlock(IMySlimBlock block, Vector3I pos, Vector3 normal)
-		{
-			MyCubeBlockDefinition myCubeBlockDefinition = block.BlockDefinition as MyCubeBlockDefinition;
-			if (myCubeBlockDefinition == null)
-			{
-				return false;
-			}
-
-			bool? flag = IsAirtightFromDefinition(block);
-			if (flag.HasValue)
-			{
-				return flag.Value;
-			}
-
-			Matrix result;
-			block.Orientation.GetMatrix(out result);
-			result.TransposeRotationInPlace();
-			Vector3I transformedNormal = Vector3I.Round(Vector3.Transform(normal, result));
-			Vector3 position = Vector3.Zero;
-
-			if (block.FatBlock != null)
-			{
-				position = pos - block.FatBlock.Position;
-			}
-
-			Vector3 value = Vector3.Transform(position, result) + myCubeBlockDefinition.Center;
-			switch (myCubeBlockDefinition.IsCubePressurized[Vector3I.Round(value)][transformedNormal])
-			{
-				case MyCubeBlockDefinition.MyCubePressurizationMark.PressurizedAlways:
-					return true;
-				case MyCubeBlockDefinition.MyCubePressurizationMark.PressurizedClosed:
-				{
-					IMyDoor myDoor;
-					if ((myDoor = (block.FatBlock as IMyDoor)) != null && (myDoor.Status == Sandbox.ModAPI.Ingame.DoorStatus.Closed || myDoor.Status == Sandbox.ModAPI.Ingame.DoorStatus.Closing))
-					{
-						return true;
-					}
-					break;
-				}
-			}
-			IMyDoor myDoor2 = block.FatBlock as IMyDoor;
-			if (myDoor2 != null && (myDoor2.Status == Sandbox.ModAPI.Ingame.DoorStatus.Closed || myDoor2.Status == Sandbox.ModAPI.Ingame.DoorStatus.Closing))
-			{
-				return IsDoorAirtight(myDoor2, ref transformedNormal, myCubeBlockDefinition);
-			}
-			return false;
-		}
-
-		private bool IsDoorAirtight(IMyDoor doorBlock, ref Vector3I transformedNormal, MyCubeBlockDefinition blockDefinition)
-		{
-			if (doorBlock is MyAdvancedDoor)
-			{
-				if (doorBlock.IsFullyClosed)
-				{
-					MyCubeBlockDefinition.MountPoint[] mountPoints = blockDefinition.MountPoints;
-					for (int i = 0; i < mountPoints.Length; i++)
-					{
-						MyCubeBlockDefinition.MountPoint mountPoint = mountPoints[i];
-						if (transformedNormal == mountPoint.Normal)
-						{
-							return false;
-						}
-					}
-					return true;
-				}
-			}
-			else if (doorBlock is MyAirtightSlideDoor)
-			{
-				if (doorBlock.IsFullyClosed && transformedNormal == Vector3I.Forward)
-				{
-					return true;
-				}
-			}
-			else if (doorBlock is MyAirtightDoorGeneric)
-			{
-				if (doorBlock.IsFullyClosed && (transformedNormal == Vector3I.Forward || transformedNormal == Vector3I.Backward))
-				{
-					return true;
-				}
-			}
-			else if (doorBlock.IsFullyClosed)
-			{
-				MyCubeBlockDefinition.MountPoint[] mountPoints = blockDefinition.MountPoints;
-				for (int i = 0; i < mountPoints.Length; i++)
-				{
-					MyCubeBlockDefinition.MountPoint mountPoint2 = mountPoints[i];
-					if (transformedNormal == mountPoint2.Normal)
-					{
-						return false;
-					}
-				}
-				return true;
-			}
-			return false;
-		}
-
+		//		MyLog.Default.Info($"[{Settings.Name}] Room: {r.StartingPosition} {r.BlockCount}");
+		//		MyLog.Default.Flush();
+		//	}
+		//}
 	}
 }

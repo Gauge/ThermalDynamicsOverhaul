@@ -40,7 +40,7 @@ namespace ThermalOverhaul
 				MyAPIGateway.Utilities.ShowNotification($"[Grid] Cell Count {tGrid.Thermals.Count}", 1, "White");
 				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Neighbors: {cell.Neighbors.Count} ratio: {cell.HeatCapacityRatio}", 1, "White");
 				MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count}  Inside: {cell.Inside.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[External] {tGrid.ExternalBlocks.Count} EComplete: {tGrid.ExternalRoomUpdateComplete} BComplete: {tGrid.ThermalCellUpdateComplete}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[External] {tGrid.Mapper.Blocks.Count} EComplete: {tGrid.Mapper.ExternalRoomUpdateComplete} BComplete: {tGrid.ThermalCellUpdateComplete}", 1, "White");
 			}
 		}
 	}

@@ -1,4 +1,5 @@
 ﻿using Sandbox.Definitions;
+using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI;
@@ -81,21 +82,6 @@ namespace ThermalOverhaul
 			CalculateSurface();
 		}
 
-		public void UpdateInsideBlocks(ref HashSet<Vector3I> external) {
-			Inside.Clear();
-			
-			for (int i = 0; i < Exposed.Count; i++)
-			{
-				Vector3I block = Exposed[i];
-				if (!external.Contains(block))
-				{
-					Inside.Add(block);
-				}
-			}
-
-			ExposedSurfaceArea = (Exposed.Count - Inside.Count) * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-		}
-
 		private void CalculateSurface() {
 			Exposed.Clear();
 			
@@ -153,6 +139,38 @@ namespace ThermalOverhaul
 					}
 				}
 			}
+		}
+
+		public void UpdateInsideBlocks(ref HashSet<Vector3I> external)
+		{
+			Inside.Clear();
+
+			//bool oxygenEnabled = MyAPIGateway.Session.SessionSettings.EnableOxygen;
+			//ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+
+			for (int i = 0; i < Exposed.Count; i++)
+			{
+				Vector3I block = Exposed[i];
+				if (!external.Contains(block))
+				{
+					Inside.Add(block);
+
+					//if (oxygenEnabled)
+					//{
+
+					//	IMyOxygenRoom room = Block.CubeGrid.GasSystem.GetOxygenRoomForCubeGridPosition(ref block);
+					//	if (room != null) // && thermals.PositionToIndex.ContainsKey(room.StartingPosition)
+					//	{
+					//		ThermalCell c = thermals.Thermals.list[thermals.PositionToIndex[room.StartingPosition]];
+
+					//		//MyLog.Default.Info($"[{Settings.Name}] Room Start: {c.Block.Position} {c.Block.FatBlock.EntityId} {c.Block.FatBlock.BlockDefinition.SubtypeId} Count: {room.BlockCount}");
+					//	}
+					//}
+
+				}
+			}
+
+			ExposedSurfaceArea = (Exposed.Count - Inside.Count) * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
 		}
 
 
