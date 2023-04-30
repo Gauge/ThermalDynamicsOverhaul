@@ -2,30 +2,35 @@
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
 
 namespace ThermalOverhaul
 {
-	public class ThermalCell
+	public class ThermalCell : IThermalCell
 	{
-		public float Temperature;
+        public long Id;
+        public float Temperature;
 		public float Generation;
 		public float HeatCapacityRatio;
 		public float NeighborCountRatio;
 		public float kA;
 		public float LastDeltaTemp;
 		public float ExposedSurfaceArea;
-
-
 		public IMySlimBlock Block;
+
+
 		public List<Vector3I> Exposed = new List<Vector3I>();
 		public List<Vector3I> Inside = new List<Vector3I>();
 		public List<ThermalCell> Neighbors = new List<ThermalCell>();
 
-		public void Init(BlockProperties p)
+		public void Init(BlockProperties p, IMySlimBlock b)
 		{
+			Block = b;
+			Id = b.Position.Flatten();
+
 			float watts = p.HeatGeneration * Settings.Instance.TimeScaleRatio;
 			
 			float k = p.Conductivity * Settings.Instance.TimeScaleRatio;
@@ -33,12 +38,12 @@ namespace ThermalOverhaul
 
 			Generation = ((p.HeatCapacity != 0) ? watts / p.HeatCapacity : 0);
 			HeatCapacityRatio = 1f / (Block.Mass * p.HeatCapacity);
-			kA = k*A ;
+			kA = k*A;
 
 			// calculate melting point
 		}
 
-		public void ResetNeighbors() {
+        public void ResetNeighbors() {
 			ClearNeighbors();
 			AssignNeighbors();
 		}
@@ -62,7 +67,7 @@ namespace ThermalOverhaul
 			for (int i = 0; i < neighbors.Count; i++)
 			{
 				IMySlimBlock n = neighbors[i];
-				ThermalCell ncell = thermals.GetCellThermals(n.Position);
+				ThermalCell ncell = thermals.Get(n.Position);
 
 				AddNeighbor(ncell);
 				ncell.AddNeighbor(this);
@@ -83,6 +88,7 @@ namespace ThermalOverhaul
 		}
 
 		private void CalculateSurface() {
+			//Stopwatch sw = Stopwatch.StartNew();
 			Exposed.Clear();
 			
 			Vector3I min = Block.Min;
@@ -139,7 +145,10 @@ namespace ThermalOverhaul
 					}
 				}
 			}
-		}
+
+            //sw.Stop();
+            //MyLog.Default.Info($"[{Settings.Name}] [ThermalCell] [Calculate Surface] t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms");
+        }
 
 		public void UpdateInsideBlocks(ref HashSet<Vector3I> external)
 		{
@@ -173,57 +182,60 @@ namespace ThermalOverhaul
 			ExposedSurfaceArea = (Exposed.Count - Inside.Count) * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
 		}
 
+        public float GetTemperature()
+        {
+			return Temperature;
+        }
+
+        //private void CalculateSurface() 
+        //{
+        //	//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} Begin Calculate Surface");
+        //	Vector3I blockArea = (Block.Max+1) - Block.Min;
+
+        //	int volume = 0;
+        //	Vector3I minx = new Vector3I(Block.Min.X - 1, Block.Min.Y, Block.Min.Z);
+        //	Vector3I maxx = new Vector3I(Block.Max.X + 2, Block.Max.Y+1, Block.Max.Z+1);
+        //	BoundingBoxI SearchAreaX = new BoundingBoxI(minx, maxx);
+
+        //	volume += SearchAreaX.Size.Volume() - blockArea.Volume();
+
+        //	Vector3I miny = new Vector3I(Block.Min.X, Block.Min.Y - 1, Block.Min.Z);
+        //	Vector3I maxy = new Vector3I(Block.Max.X+1, Block.Max.Y + 2, Block.Max.Z+1);
+        //	BoundingBoxI SearchAreaY = new BoundingBoxI(miny, maxy);
+
+        //	volume += SearchAreaY.Size.Volume() - blockArea.Volume();
+
+        //	Vector3I minz = new Vector3I(Block.Min.X, Block.Min.Y, Block.Min.Z - 1);
+        //	Vector3I maxz = new Vector3I(Block.Max.X+1, Block.Max.Y+1, Block.Max.Z + 2);
+        //	BoundingBoxI SearchAreaZ = new BoundingBoxI(minz, maxz);
+
+        //	volume += SearchAreaZ.Size.Volume() - blockArea.Volume();
+
+        //	//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} {volume}");
+
+        //	for (int i = 0; i < Neighbors.Count; i++)
+        //	{
+        //		ThermalCell ncell = Neighbors[i];
+
+        //		var def = (ncell.Block.BlockDefinition as MyCubeBlockDefinition);
+        //		if (def != null && def.IsAirTight.HasValue && def.IsAirTight.Value)
+        //		{
+        //			BoundingBoxI ncellBox = new BoundingBoxI(ncell.Block.Min, ncell.Block.Max + 1);
+
+        //			volume -= ncellBox.Intersect(SearchAreaX).Size.Volume();
+        //			volume -= ncellBox.Intersect(SearchAreaY).Size.Volume();
+        //			volume -= ncellBox.Intersect(SearchAreaZ).Size.Volume();
+        //		}
+
+        //		//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} {volume}");
+        //	}
+
+        //	ExposedSurfaceArea = volume * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
+
+        //}
 
 
-		//private void CalculateSurface() 
-		//{
-		//	//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} Begin Calculate Surface");
-		//	Vector3I blockArea = (Block.Max+1) - Block.Min;
-
-		//	int volume = 0;
-		//	Vector3I minx = new Vector3I(Block.Min.X - 1, Block.Min.Y, Block.Min.Z);
-		//	Vector3I maxx = new Vector3I(Block.Max.X + 2, Block.Max.Y+1, Block.Max.Z+1);
-		//	BoundingBoxI SearchAreaX = new BoundingBoxI(minx, maxx);
-
-		//	volume += SearchAreaX.Size.Volume() - blockArea.Volume();
-
-		//	Vector3I miny = new Vector3I(Block.Min.X, Block.Min.Y - 1, Block.Min.Z);
-		//	Vector3I maxy = new Vector3I(Block.Max.X+1, Block.Max.Y + 2, Block.Max.Z+1);
-		//	BoundingBoxI SearchAreaY = new BoundingBoxI(miny, maxy);
-
-		//	volume += SearchAreaY.Size.Volume() - blockArea.Volume();
-
-		//	Vector3I minz = new Vector3I(Block.Min.X, Block.Min.Y, Block.Min.Z - 1);
-		//	Vector3I maxz = new Vector3I(Block.Max.X+1, Block.Max.Y+1, Block.Max.Z + 2);
-		//	BoundingBoxI SearchAreaZ = new BoundingBoxI(minz, maxz);
-
-		//	volume += SearchAreaZ.Size.Volume() - blockArea.Volume();
-
-		//	//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} {volume}");
-
-		//	for (int i = 0; i < Neighbors.Count; i++)
-		//	{
-		//		ThermalCell ncell = Neighbors[i];
-
-		//		var def = (ncell.Block.BlockDefinition as MyCubeBlockDefinition);
-		//		if (def != null && def.IsAirTight.HasValue && def.IsAirTight.Value)
-		//		{
-		//			BoundingBoxI ncellBox = new BoundingBoxI(ncell.Block.Min, ncell.Block.Max + 1);
-
-		//			volume -= ncellBox.Intersect(SearchAreaX).Size.Volume();
-		//			volume -= ncellBox.Intersect(SearchAreaY).Size.Volume();
-		//			volume -= ncellBox.Intersect(SearchAreaZ).Size.Volume();
-		//		}
-
-		//		//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} {volume}");
-		//	}
-
-		//	ExposedSurfaceArea = volume * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-
-		//}
 
 
-
-
-	}
+    }
 }

@@ -1,9 +1,12 @@
-﻿using Sandbox.Definitions;
+﻿using EmptyKeys.UserInterface.Generated.StoreBlockView_Bindings;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
+using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using VRage.Game;
 using VRage.Game.Components;
@@ -16,12 +19,14 @@ using VRageMath;
 namespace ThermalOverhaul
 {
 	[MyEntityComponentDescriptor(typeof(MyObjectBuilder_CubeGrid), true)]
-	public class ThermalGrid : MyGameLogicComponent
+	public class ThermalGrid : MyGameLogicComponent, IThermalGrid
 	{
-		private MyCubeGrid Grid;
-		public Dictionary<Vector3I, int> PositionToIndex;
+
+        private static readonly Guid StorageGuid = new Guid("f7cd64ae-9cd8-41f3-8e5d-3db992619343");
+
+        private MyCubeGrid Grid;
+		public Dictionary<long, int> PositionToIndex;
 		public MyFreeList<ThermalCell> Thermals;
-		//public Dictionary<Vector3I, ThermalCell> Rooms;
 
 		public GridMapper Mapper;
 
@@ -45,23 +50,106 @@ namespace ThermalOverhaul
 
 			Grid = Entity as MyCubeGrid;
 
-			PositionToIndex = new Dictionary<Vector3I, int>(Vector3I.Comparer);
+			PositionToIndex = new Dictionary<long, int>();
 			Thermals = new MyFreeList<ThermalCell>();
-			//Rooms = new Dictionary<Vector3I, ThermalCell>();
 			Mapper = new GridMapper(Grid);
-
 
 			Grid.OnBlockAdded += BlockAdded;
 			Grid.OnBlockRemoved += BlockRemoved;
 
-			NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            //MyLog.Default.Info($"[{Settings.Name}] {Entity.DisplayName} ({Entity.EntityId}) Storage is empty: {Entity.Storage == null}");
+
+            if (Entity.Storage == null)
+                Entity.Storage = new MyModStorageComponent();
+
+            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
 		}
 
-		public override void UpdateOnceBeforeFrame()
+        public override bool IsSerialized()
+        {
+			Save();
+            return base.IsSerialized();
+        }
+
+
+		private GridData PackGridInfo() 
+		{
+            GridData gridData = new GridData();
+
+            int count = Thermals.Count;
+
+            gridData.position = new long[count];
+            gridData.temperature = new float[count];
+
+            int realCount = 0;
+            float temp = 0;
+            for (int i = 0; i < Thermals.UsedLength; i++)
+            {
+                ThermalCell c = Thermals.list[i];
+                if (c == null || (temp = c.Temperature) == 0) continue;
+
+                gridData.position[realCount] = c.Id;
+                gridData.temperature[realCount] = temp;
+                realCount++;
+            }
+
+            Array.Resize(ref gridData.position, realCount);
+            Array.Resize(ref gridData.temperature, realCount);
+
+			return gridData;
+        }
+
+        private void Save()
+        {
+            //Stopwatch sw = Stopwatch.StartNew();
+
+            string data = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(PackGridInfo()));
+
+            MyModStorageComponentBase storage = Entity.Storage;
+			if (storage.ContainsKey(StorageGuid))
+			{
+				storage[StorageGuid] = data;
+            }
+			else 
+			{
+				storage.Add(StorageGuid, data);
+			}
+            //sw.Stop();
+            //MyLog.Default.Info($"[{Settings.Name}] [SAVE] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms, size: {data.Length}, count: {s.temperature.Length}");
+        }
+
+		private void Load()
+		{
+            Stopwatch sw = Stopwatch.StartNew();
+			try
+			{
+				if (Entity.Storage.ContainsKey(StorageGuid))
+				{
+					GridData data = MyAPIGateway.Utilities.SerializeFromBinary<GridData>(Convert.FromBase64String(Entity.Storage[StorageGuid]));
+
+					for (int i = 0; i < data.temperature.Length; i++)
+					{
+						Thermals.list[PositionToIndex[data.position[i]]].Temperature = data.temperature[i];
+					}
+				}
+			}
+			catch 
+			{ 
+			
+			}
+
+            sw.Stop();
+            MyLog.Default.Info($"[{Settings.Name}] [LOAD] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms");
+        }
+
+
+        public override void UpdateOnceBeforeFrame()
 		{
 			if (Grid.Physics == null)
 				NeedsUpdate = MyEntityUpdateEnum.NONE;
-		}
+
+            Load();
+        }
 
 		public override void UpdateBeforeSimulation()
 		{
@@ -111,7 +199,6 @@ namespace ThermalOverhaul
 
 				if (!Mapper.ExternalRoomUpdateComplete && Mapper.BlockQueue.Count == 0)
 				{
-					//HandleRooms();
 					Mapper.ExternalRoomUpdateComplete = true;
 					ThermalCellUpdateComplete = false;
 				}
@@ -147,24 +234,23 @@ namespace ThermalOverhaul
 				}
 			}
 			ThermalCell cell = new ThermalCell();
-			cell.Block = b;
-
-			cell.AssignNeighbors();
 
 			if (block != null)
 			{
-				cell.Init(block);
+				cell.Init(block, b);
 			}
 			else if (group != null)
 			{
-				cell.Init(group);
+				cell.Init(group, b);
 			}
 			else
 			{
-				cell.Init(Settings.Instance.Generic);
+				cell.Init(Settings.Instance.Generic, b);
 			}
 
-			IMyCubeBlock fat = b.FatBlock;
+            cell.AssignNeighbors();
+
+            IMyCubeBlock fat = b.FatBlock;
 			if (fat is IMyPistonBase)
 			{
 				(fat as IMyPistonBase).AttachedEntityChanged += GridGroupChanged;
@@ -180,7 +266,7 @@ namespace ThermalOverhaul
 				IMyLandingGear gear = (fat as IMyLandingGear);
 				gear.StateChanged += (state) => {
 					IMyEntity entity = gear.GetAttachedEntity();
-					ThermalCell c = GetCellThermals(gear.Position);
+					ThermalCell c = Get(gear.Position);
 
 					// if the entity is not MyCubeGrid reset landing gear neighbors because we probably detached
 					if (!(entity is MyCubeGrid))
@@ -215,7 +301,7 @@ namespace ThermalOverhaul
 							{
 								temp.Z = z;
 
-								ThermalCell ncell = gtherms.GetCellThermals(temp);
+								ThermalCell ncell = gtherms.Get(temp);
 								//MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
 								if (ncell != null)
 								{
@@ -233,8 +319,10 @@ namespace ThermalOverhaul
 				(fat as IMyDoor).DoorStateChanged += (state) => Mapper.ExternalBlockReset();
 			}
 
-			int index = Thermals.Allocate();
-			PositionToIndex.Add(b.Position, index);
+            //MyLog.Default.Info($"[{Settings.Name}] Added ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
+
+            int index = Thermals.Allocate();
+			PositionToIndex.Add(b.Position.Flatten(), index);
 			Thermals.list[index] = cell;
 
 			//MyLog.Default.Info($"[{Settings.Name}] Added {b.Position} Index: {index} {type}/{subtype}");
@@ -259,11 +347,13 @@ namespace ThermalOverhaul
 				(fat as IMyDoor).DoorStateChanged -= (state) => Mapper.ExternalBlockReset();
 			}
 
-			int index = PositionToIndex[b.Position];
+
+			long flat = b.Position.Flatten();
+			int index = PositionToIndex[flat];
 			ThermalCell cell = Thermals.list[index];
 			cell.ClearNeighbors();
 
-			PositionToIndex.Remove(b.Position);
+			PositionToIndex.Remove(flat);
 			Thermals.Free(index);
 
 			CountPerFrame = GetCountPerFrame();
@@ -272,7 +362,7 @@ namespace ThermalOverhaul
 
 		private void GridGroupChanged(IMyMechanicalConnectionBlock block)
 		{
-			int index = PositionToIndex[block.Position];
+			int index = PositionToIndex[block.Position.Flatten()];
 			ThermalCell cell = Thermals.list[index];
 
 			MyLog.Default.Info($"[{Settings.Name}] {block.Position} IsAttached: {block.IsAttached} DoubleCheck: {block.Top != null}");
@@ -297,7 +387,7 @@ namespace ThermalOverhaul
 			{
 
 				ThermalGrid g = block.Top.CubeGrid.GameLogic.GetAs<ThermalGrid>();
-				ThermalCell ncell = g.GetCellThermals(block.Top.Position);
+				ThermalCell ncell = g.Get(block.Top.Position);
 
 				MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
 
@@ -345,17 +435,39 @@ namespace ThermalOverhaul
 			}
 		}
 
-		public ThermalCell GetCellThermals(Vector3I position)
+		/// <summary>
+		/// gets a the thermal cell at a specific location
+		/// </summary>
+		/// <param name="position"></param>
+		/// <returns></returns>
+        public ThermalCell Get(Vector3I position)
+        {
+			long flat = position.Flatten();
+            if (PositionToIndex.ContainsKey(flat))
+            {
+                return Thermals.list[PositionToIndex[flat]];
+            }
+
+            return null;
+        }
+
+        public IThermalCell GetCell(Vector3I position)
 		{
-			if (PositionToIndex.ContainsKey(position))
+            long flat = position.Flatten();
+            if (PositionToIndex.ContainsKey(flat))
 			{
-				return Thermals.list[PositionToIndex[position]];
+				return Thermals.list[PositionToIndex[flat]];
 			}
 
 			return null;
 		}
 
-		public Color GetTemperatureColor(float temp)
+        public float Temperature()
+        {
+            return 10000f;
+        }
+
+        public Color GetTemperatureColor(float temp)
 		{
 			//float max = 6f;
 			float max = 100f;
@@ -368,27 +480,5 @@ namespace ThermalOverhaul
 
 			return new Color(red, (!LoopDirection && Settings.Instance.Frequency >= 60 ? 1 : 0), blue);
 		}
-
-
-		//private void HandleRooms() {
-		//	List<IMyOxygenRoom> rooms = new List<IMyOxygenRoom>();
-		//	(Grid as IMyCubeGrid).GasSystem.GetRooms(rooms);
-
-
-		//	Dictionary<Vector3I, ThermalCell> newRooms = new Dictionary<Vector3I, ThermalCell>();
-		//	for (int i = 0; i < rooms.Count; i++)
-		//	{
-		//		IMyOxygenRoom r = rooms[i];
-
-		//		if (Rooms.ContainsKey(r.StartingPosition))
-		//		{
-		//			ThermalCell c = Rooms[r.StartingPosition];
-
-		//		}
-
-		//		MyLog.Default.Info($"[{Settings.Name}] Room: {r.StartingPosition} {r.BlockCount}");
-		//		MyLog.Default.Flush();
-		//	}
-		//}
-	}
+    }
 }

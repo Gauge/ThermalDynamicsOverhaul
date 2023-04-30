@@ -12,8 +12,8 @@ namespace ThermalOverhaul
 	[ProtoContract]
 	public class Settings
 	{
-		public const string Filename = "ThermalOverhaulConfig.cfg";
-		public const string Name = "Thermal Overhaul";
+		public const string Filename = "ThermalDynamicsConfig.cfg";
+		public const string Name = "Thermal Dynamics";
 		public const bool Debug = true;
 
 		public const float SecondsPerFrame = 1f / 60f;
@@ -137,9 +137,6 @@ namespace ThermalOverhaul
 			settings.Init();
 			return settings;
 		}
-
-
-
 
 		public static void Save(Settings settings)
 		{

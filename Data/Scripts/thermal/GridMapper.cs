@@ -54,7 +54,6 @@ namespace ThermalOverhaul
 
 		public void ExternalBlockCheck(Vector3I block)
 		{
-			//Vector3I block = blockQueue.Dequeue();
 			for (int i = 0; i < neighbors.Length; i++)
 			{
 				Vector3I n = block + neighbors[i];
