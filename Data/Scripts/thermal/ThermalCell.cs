@@ -1,190 +1,306 @@
 ﻿using Sandbox.Definitions;
+using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using VRage.Game;
+using VRage.Game.Components;
 using VRage.Game.ModAPI;
-using VRage.Utils;
 using VRageMath;
+using Sandbox.Definitions;
+using VRage.GameServices;
 
 namespace ThermalOverhaul
 {
-	public class ThermalCell : IThermalCell
-	{
+    public class ThermalCell
+    {
         public long Id;
+
+        public long CurrentFrame;
+        public float LastTemperature;
         public float Temperature;
-		public float Generation;
-		public float HeatCapacityRatio;
-		public float NeighborCountRatio;
-		public float kA;
-		public float LastDeltaTemp;
-		public float ExposedSurfaceArea;
-		public IMySlimBlock Block;
+        public float HeatGeneration;
+        public float SpacificHeatInverted;
+
+        public float PowerOutput;
+        public float PowerInput;
+        public float ConsumerGeneration;
+        public float ProducerGeneration;
+
+        public float k;
+        public float A;
+        public float kA;
+        public float dxInverted;
+        public float LastDeltaTemp;
+        public float ExposedSurfaceArea;
+        public IMySlimBlock Block;
 
 
-		public List<Vector3I> Exposed = new List<Vector3I>();
-		public List<Vector3I> Inside = new List<Vector3I>();
-		public List<ThermalCell> Neighbors = new List<ThermalCell>();
+        public List<Vector3I> Exposed = new List<Vector3I>();
+        public List<Vector3I> Inside = new List<Vector3I>();
+        public List<ThermalCell> Neighbors = new List<ThermalCell>();
 
-		public void Init(BlockProperties p, IMySlimBlock b)
-		{
-			Block = b;
-			Id = b.Position.Flatten();
+        public void Init(BlockProperties p, IMySlimBlock b)
+        {
+            Block = b;
+            Id = b.Position.Flatten();
 
-			float watts = p.HeatGeneration * Settings.Instance.TimeScaleRatio;
-			
-			float k = p.Conductivity * Settings.Instance.TimeScaleRatio;
-			float A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
+            if (Block.FatBlock != null)
+            {
+                IMyCubeBlock fat = Block.FatBlock;
 
-			Generation = ((p.HeatCapacity != 0) ? watts / p.HeatCapacity : 0);
-			HeatCapacityRatio = 1f / (Block.Mass * p.HeatCapacity);
-			kA = k*A;
+                if (fat is IMyThrust)
+                {
+                    IMyThrust thrust = (fat as IMyThrust);
+                    thrust.ThrustChanged += OnThrustChanged;
+                    OnThrustChanged(thrust, 0, thrust.CurrentThrust);
 
-			// calculate melting point
-		}
+                }
+                else
+                {
+                    fat.Components.ComponentAdded += OnComponentAdded;
+                    fat.Components.ComponentRemoved += OnComponentRemoved;
 
-        public void ResetNeighbors() {
-			ClearNeighbors();
-			AssignNeighbors();
-		}
+                    if (fat.Components.Contains(typeof(MyResourceSourceComponent)))
+                    {
+                        fat.Components.Get<MyResourceSourceComponent>().OutputChanged += PowerOutputChanged;
+                    }
 
-		public void ClearNeighbors() 
-		{
-			for (int i = 0; i < Neighbors.Count; i++)
-			{
-				Neighbors[i].RemoveNeighbor(this);
-			}
-		}
+                    if (fat.Components.Contains(typeof(MyResourceSinkComponent)))
+                    {
+                        fat.Components.Get<MyResourceSinkComponent>().CurrentInputChanged += PowerInputChanged;
+                    }
+                }
+            }
 
-		public void AssignNeighbors()
-		{
-			//get a list of current neighbors from the grid
-			List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
-			Block.GetNeighbours(neighbors);
+            // k = Watts / (meters - kelven)
+            k = p.Conductivity;
+            
+            // A = surface area
+            A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
+            kA = k * A * Settings.Instance.TimeScaleRatio; // added the time scale ratio to save on compute power
+            dxInverted = 1f / Block.CubeGrid.GridSize;
 
-			ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+            if (p.SpacificHeat > 0)
+            {
+                SpacificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
+            }
 
-			for (int i = 0; i < neighbors.Count; i++)
-			{
-				IMySlimBlock n = neighbors[i];
-				ThermalCell ncell = thermals.Get(n.Position);
-
-				AddNeighbor(ncell);
-				ncell.AddNeighbor(this);
-			}
-		}
-
-		public void AddNeighbor(ThermalCell n) 
-		{
-			Neighbors.Add(n);
-			CalculateSurface();
-			NeighborCountRatio = (Neighbors.Count == 0) ? 0 : 1f / Neighbors.Count;
-		}
-
-		public void RemoveNeighbor(ThermalCell n) 
-		{
-			Neighbors.Remove(n);
-			CalculateSurface();
-		}
-
-		private void CalculateSurface() {
-			//Stopwatch sw = Stopwatch.StartNew();
-			Exposed.Clear();
-			
-			Vector3I min = Block.Min;
-			Vector3I max = Block.Max + 1;
-
-			Vector3I emin = Block.Min - 1;
-			Vector3I emax = Block.Max + 2;
-
-			for (int x = emin.X; x < emax.X; x++)
-			{
-				bool xIn = x >= min.X && x < max.X;
-				
-				for (int y = emin.Y; y < emax.Y; y++)
-				{
-					bool yIn = y >= min.Y && y < max.Y;
-					
-					for (int z = emin.Z; z < emax.Z; z++)
-					{
-						bool zIn = z >= min.Z && z < max.Z;
-
-						if (xIn && yIn && zIn)
-							continue;
-
-						bool found = false;
-						for (int i = 0; i < Neighbors.Count; i++)
-						{
-							ThermalCell ncell = Neighbors[i];
-
-							var def = (ncell.Block.BlockDefinition as MyCubeBlockDefinition);
-							if (!(def != null && def.IsAirTight.HasValue && def.IsAirTight.Value))
-								continue;
-
-							Vector3I nmin = ncell.Block.Min;
-							Vector3I nmax = ncell.Block.Max + 1;
-
-							if (x >= nmin.X && x < nmax.X && y >= nmin.Y && y < nmax.Y && z >= nmin.Z && z < nmax.Z)
-							{
-								found = true;
-								break;
-							}
-						}
-
-						if (!found)
-						{
-							Vector3I p = new Vector3I(x, y, z);
-
-							if (!xIn && yIn && zIn ||
-								xIn && !yIn && zIn ||
-								xIn && yIn && !zIn)
-							{
-								Exposed.Add(p);
-							}
-						}
-					}
-				}
-			}
-
-            //sw.Stop();
-            //MyLog.Default.Info($"[{Settings.Name}] [ThermalCell] [Calculate Surface] t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms");
+            ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpacificHeatInverted;
+            ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpacificHeatInverted;
+            UpdateHeat();
         }
 
-		public void UpdateInsideBlocks(ref HashSet<Vector3I> external)
-		{
-			Inside.Clear();
+        private void OnThrustChanged(IMyThrust block, float old, float current)
+        {
+            MyThrustDefinition def = block.SlimBlock.BlockDefinition as MyThrustDefinition;
+            if (block.IsWorking)
+            {
+                PowerInput = def.MinPowerConsumption + (def.MaxPowerConsumption * (block.CurrentThrust / block.MaxThrust));
+                PowerInput *= 1000000;
+            }
+            else
+            {
+                PowerInput = 0;
+            }
 
-			//bool oxygenEnabled = MyAPIGateway.Session.SessionSettings.EnableOxygen;
-			//ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+            UpdateHeat();
+        }
 
-			for (int i = 0; i < Exposed.Count; i++)
-			{
-				Vector3I block = Exposed[i];
-				if (!external.Contains(block))
-				{
-					Inside.Add(block);
+        private void OnComponentAdded(Type compType, MyEntityComponentBase component)
+        {
+            if (compType == typeof(MyResourceSourceComponent))
+            {
+                (component as MyResourceSourceComponent).OutputChanged += PowerOutputChanged;
+            }
 
-					//if (oxygenEnabled)
-					//{
+            if (compType == typeof(MyResourceSinkComponent))
+            {
+                (component as MyResourceSinkComponent).CurrentInputChanged += PowerInputChanged;
+            }
+        }
 
-					//	IMyOxygenRoom room = Block.CubeGrid.GasSystem.GetOxygenRoomForCubeGridPosition(ref block);
-					//	if (room != null) // && thermals.PositionToIndex.ContainsKey(room.StartingPosition)
-					//	{
-					//		ThermalCell c = thermals.Thermals.list[thermals.PositionToIndex[room.StartingPosition]];
+        private void OnComponentRemoved(Type compType, MyEntityComponentBase component)
+        {
+            if (compType == typeof(MyResourceSourceComponent))
+            {
+                (component as MyResourceSourceComponent).OutputChanged -= PowerOutputChanged;
+            }
 
-					//		//MyLog.Default.Info($"[{Settings.Name}] Room Start: {c.Block.Position} {c.Block.FatBlock.EntityId} {c.Block.FatBlock.BlockDefinition.SubtypeId} Count: {room.BlockCount}");
-					//	}
-					//}
+            if (compType == typeof(MyResourceSinkComponent))
+            {
+                (component as MyResourceSinkComponent).CurrentInputChanged -= PowerInputChanged;
+            }
 
-				}
-			}
 
-			ExposedSurfaceArea = (Exposed.Count - Inside.Count) * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-		}
+        }
+
+        private void PowerInputChanged(MyDefinitionId resourceTypeId, float oldInput, MyResourceSinkComponent sink)
+        {
+            try
+            {
+                // power in watts
+                PowerInput = sink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) * 1000000;
+                UpdateHeat();
+            }
+            catch { }
+        }
+
+        private void PowerOutputChanged(MyDefinitionId changedResourceId, float oldOutput, MyResourceSourceComponent source)
+        {
+            try
+            {
+                // power in watts
+                PowerOutput = source.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) * 1000000;
+                UpdateHeat();
+            }
+            catch { }
+        }
+
+        private void UpdateHeat()
+        {
+            HeatGeneration = (PowerOutput * ProducerGeneration) + (PowerInput * ConsumerGeneration);
+        }
+
+        public void ResetNeighbors()
+        {
+            ClearNeighbors();
+            AssignNeighbors();
+        }
+
+        public void ClearNeighbors()
+        {
+            for (int i = 0; i < Neighbors.Count; i++)
+            {
+                ThermalCell ncell = Neighbors[i];
+                ncell.Neighbors.Remove(this);
+                ncell.CalculateSurface();
+            }
+
+            Neighbors.Clear();
+        }
+
+        public void AssignNeighbors()
+        {
+            //get a list of current neighbors from the grid
+            List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
+            Block.GetNeighbours(neighbors);
+
+            ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                IMySlimBlock n = neighbors[i];
+                ThermalCell ncell = thermals.Get(n.Position);
+
+                Neighbors.Add(ncell);
+                ncell.Neighbors.Add(this);
+                ncell.CalculateSurface();
+            }
+
+            CalculateSurface();
+        }
+
+        /// <summary>
+        /// Repopulates the list of exposed positions
+        /// </summary>
+        public void CalculateSurface()
+        {
+            Exposed.Clear();
+
+            // define the cells area
+            Vector3I min = Block.Min;
+            Vector3I max = Block.Max + 1;
+
+            // define the connected cell area
+            Vector3I emin = Block.Min - 1;
+            Vector3I emax = Block.Max + 2;
+
+            for (int x = emin.X; x < emax.X; x++)
+            {
+                bool xIn = x >= min.X && x < max.X;
+
+                for (int y = emin.Y; y < emax.Y; y++)
+                {
+                    bool yIn = y >= min.Y && y < max.Y;
+
+                    for (int z = emin.Z; z < emax.Z; z++)
+                    {
+                        bool zIn = z >= min.Z && z < max.Z;
+
+                        if (xIn && yIn && zIn)
+                            continue;
+
+                        bool found = false;
+                        for (int i = 0; i < Neighbors.Count; i++)
+                        {
+                            ThermalCell ncell = Neighbors[i];
+
+                            var def = (ncell.Block.BlockDefinition as MyCubeBlockDefinition);
+                            if (!(def != null && def.IsAirTight.HasValue && def.IsAirTight.Value))
+                                continue;
+
+                            Vector3I nmin = ncell.Block.Min;
+                            Vector3I nmax = ncell.Block.Max + 1;
+
+                            if (x >= nmin.X && x < nmax.X && y >= nmin.Y && y < nmax.Y && z >= nmin.Z && z < nmax.Z)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found)
+                        {
+                            Vector3I p = new Vector3I(x, y, z);
+
+                            if (!xIn && yIn && zIn ||
+                                xIn && !yIn && zIn ||
+                                xIn && yIn && !zIn)
+                            {
+                                Exposed.Add(p);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public void UpdateInsideBlocks(ref HashSet<Vector3I> external)
+        {
+            Inside.Clear();
+
+            //bool oxygenEnabled = MyAPIGateway.Session.SessionSettings.EnableOxygen;
+            //ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+
+            for (int i = 0; i < Exposed.Count; i++)
+            {
+                Vector3I block = Exposed[i];
+                if (!external.Contains(block))
+                {
+                    Inside.Add(block);
+
+                    //if (oxygenEnabled)
+                    //{
+
+                    //	IMyOxygenRoom room = Block.CubeGrid.GasSystem.GetOxygenRoomForCubeGridPosition(ref block);
+                    //	if (room != null) // && thermals.PositionToIndex.ContainsKey(room.StartingPosition)
+                    //	{
+                    //		ThermalCell c = thermals.Thermals.list[thermals.PositionToIndex[room.StartingPosition]];
+
+                    //		//MyLog.Default.Info($"[{Settings.Name}] Room Start: {c.Block.Position} {c.Block.FatBlock.EntityId} {c.Block.FatBlock.BlockDefinition.SubtypeId} Count: {room.BlockCount}");
+                    //	}
+                    //}
+
+                }
+            }
+
+            ExposedSurfaceArea = (Exposed.Count - Inside.Count) * A;
+        }
 
         public float GetTemperature()
         {
-			return Temperature;
+            return Temperature;
         }
 
         //private void CalculateSurface() 

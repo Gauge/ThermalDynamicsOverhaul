@@ -35,8 +35,11 @@ namespace ThermalOverhaul
 		[ProtoMember(50)]
 		public float VaccumDrainRate;
 
+		[ProtoMember(60)]
+		public float VaccumeFullStrengthTemperature;
+
 		/// <summary>
-		/// Used to adjust values that are are calculated in seconds, to the current time scale 
+		/// Used to adjust values that are calculated in seconds, to the current time scale 
 		/// </summary>
 		[XmlIgnore]
 		public float TimeScaleRatio;
@@ -52,36 +55,37 @@ namespace ThermalOverhaul
 			Settings s = new Settings {
 				Version = 1,
 				Frequency = 1,
-				VaccumDrainRate = 100000,
+				VaccumDrainRate = 100000f,
+				VaccumeFullStrengthTemperature = 100,
 
 				Generic = new BlockProperties {
 					Type = "Generic",
 					Conductivity = 7000f,
-					HeatCapacity = 450f,
-					HeatGeneration = 0f,
-				},
+					SpacificHeat = 450f,
+                    ProducerWasteHeatPerWatt = 0.25f,
+                    ConsumerWasteHeatPerWatt = 1f,
+                },
 
 				BlockConfig = new List<BlockProperties>() {
 					new BlockProperties { 
 						Type = "MyObjectBuilder_Reactor",
 						Conductivity = 9000f,
-						HeatCapacity = 450f,
-						HeatGeneration = 250000000000f,
-					},
+						SpacificHeat = 450f,
+						ProducerWasteHeatPerWatt = 0.25f,
+						ConsumerWasteHeatPerWatt = 1f,
+                    },
 
 					new BlockProperties {
 						Type = "MyObjectBuilder_ConveyorConnector",
-						Conductivity = 9400f,
-						HeatCapacity = 100f,
-						HeatGeneration = 0f,
-					},
+						Conductivity = 90000f,
+						SpacificHeat = 25f,
+                    },
 
 					new BlockProperties {
 						Type = "MyObjectBuilder_Conveyor",
-						Conductivity = 9400f,
-						HeatCapacity = 100f,
-						HeatGeneration = 0f,
-					},
+						Conductivity = 90000f,
+						SpacificHeat = 25f,
+                    },
 
 					
 				},

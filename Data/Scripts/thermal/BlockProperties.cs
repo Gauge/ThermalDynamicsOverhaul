@@ -38,12 +38,13 @@ namespace ThermalOverhaul
         /// This field specifies the heat capacity of the block in joules per kelvin.
         /// </summary>
         [ProtoMember(5)]
-        public float HeatCapacity;
+        public float SpacificHeat;
 
-        /// <summary>
-        /// This field specifies the heat generation of the block in joules per second.
-        /// </summary>
-        [ProtoMember(10)]
-        public float HeatGeneration;
+
+        [ProtoMember(20)]
+        public float ProducerWasteHeatPerWatt;
+
+        [ProtoMember(30)]
+        public float ConsumerWasteHeatPerWatt;
     }
 }

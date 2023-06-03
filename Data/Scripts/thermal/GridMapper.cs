@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using VRage.Game.ModAPI;
+using VRage.Utils;
 using VRageMath;
 
 namespace ThermalOverhaul
@@ -58,7 +59,7 @@ namespace ThermalOverhaul
 			{
 				Vector3I n = block + neighbors[i];
 
-				//MyLog.Default.Info($"[{Settings.Name}] Neighbor {n} OoB: {Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max} visited: {visitedBlocks.Contains(n)} airtight: {IsAirtightBetweenPositions(block, n)}");
+				//MyLog.Default.Info($"[{Settings.Name}] Neighbor {n} OoB: {Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max} visited: {Blocks.Contains(n)} airtight: {IsAirtightBetweenPositions(block, n)}");
 				if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || Blocks.Contains(n) || IsAirtightBetweenPositions(block, n))
 					continue;
 

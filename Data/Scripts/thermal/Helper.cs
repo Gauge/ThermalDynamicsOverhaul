@@ -18,7 +18,7 @@ namespace ThermalOverhaul
         /// <returns></returns>
         public static long Flatten(this Vector3I vector) 
         {
-            return size * size * vector.Z + size * vector.Y + vector.X;
+            return (size * size * vector.Z) + (size * vector.Y) + vector.X;
         }
 
         /// <summary>
