@@ -1,5 +1,4 @@
-﻿using EmptyKeys.UserInterface.Generated.StoreBlockView_Bindings;
-using Sandbox.Definitions;
+﻿using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
@@ -25,7 +24,7 @@ namespace ThermalOverhaul
         private static readonly Guid StorageGuid = new Guid("f7cd64ae-9cd8-41f3-8e5d-3db992619343");
 
         private MyCubeGrid Grid;
-        public Dictionary<long, int> PositionToIndex;
+        public Dictionary<int, int> PositionToIndex;
         public MyFreeList<ThermalCell> Thermals;
 
         public GridMapper Mapper;
@@ -33,10 +32,7 @@ namespace ThermalOverhaul
         private int IterationFrames = 0;
         private int IterationIndex = 0;
         private int CountPerFrame = 0;
-        private bool LoopDirection = true;
 
-        //private int ExternalCountPerFrame = 0;
-        //public bool ExternalRoomUpdateComplete = false;
         public bool ThermalCellUpdateComplete = true;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -53,7 +49,7 @@ namespace ThermalOverhaul
             if (Entity.Storage == null)
                 Entity.Storage = new MyModStorageComponent();
 
-            PositionToIndex = new Dictionary<long, int>();
+            PositionToIndex = new Dictionary<int, int>();
             Thermals = new MyFreeList<ThermalCell>();
             Mapper = new GridMapper(Grid);
 
@@ -71,38 +67,61 @@ namespace ThermalOverhaul
             return base.IsSerialized();
         }
 
-        private GridData PackGridInfo()
+        private string Pack()
         {
-            GridData gridData = new GridData();
+            byte[] bytes = new byte[Thermals.Count * 8];
 
-            int count = Thermals.Count;
-
-            gridData.position = new long[count];
-            gridData.temperature = new float[count];
-
-            int realCount = 0;
-            float temp = 0;
+            int bi = 0;
             for (int i = 0; i < Thermals.UsedLength; i++)
             {
                 ThermalCell c = Thermals.list[i];
-                if (c == null || (temp = c.Temperature) == 0) continue;
+                if (c == null) continue;
 
-                gridData.position[realCount] = c.Id;
-                gridData.temperature[realCount] = temp;
-                realCount++;
+                int id = c.Id;
+                bytes[bi] = (byte)id;
+                bytes[bi + 1] = (byte)(id >> 8);
+                bytes[bi + 2] = (byte)(id >> 16);
+                bytes[bi + 3] = (byte)(id >> 24);
+
+                int t = (int)(c.Temperature * 10000);
+                bytes[bi + 4] = (byte)t;
+                bytes[bi + 5] = (byte)(t >> 8);
+                bytes[bi + 6] = (byte)(t >> 16);
+                bytes[bi + 7] = (byte)(t >> 24);
+
+                bi += 8;
             }
 
-            Array.Resize(ref gridData.position, realCount);
-            Array.Resize(ref gridData.temperature, realCount);
-
-            return gridData;
+            return Convert.ToBase64String(bytes);
         }
+
+        private void Unpack(string data) 
+        {
+            byte[] bytes = Convert.FromBase64String(data);
+
+            for (int i = 0; i < bytes.Length; i += 8)
+            {
+                int id = bytes[i];
+                id |= bytes[i + 1] << 8;
+                id |= bytes[i + 2] << 16;
+                id |= bytes[i + 3] << 24;
+
+                int f = bytes[i + 4];
+                f |= bytes[i + 5] << 8;
+                f |= bytes[i + 6] << 16;
+                f |= bytes[i + 7] << 24;
+
+                Thermals.list[PositionToIndex[id]].Temperature = f * 0.0001f;    
+            }
+        } 
 
         private void Save()
         {
-            //Stopwatch sw = Stopwatch.StartNew();
+            Stopwatch sw = Stopwatch.StartNew();
 
-            string data = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(PackGridInfo()));
+            string data = Pack();
+
+            //string data = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(PackGridInfo()));
 
             MyModStorageComponentBase storage = Entity.Storage;
             if (storage.ContainsKey(StorageGuid))
@@ -113,8 +132,8 @@ namespace ThermalOverhaul
             {
                 storage.Add(StorageGuid, data);
             }
-            //sw.Stop();
-            //MyLog.Default.Info($"[{Settings.Name}] [SAVE] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms, size: {data.Length}, count: {s.temperature.Length}");
+            sw.Stop();
+            MyLog.Default.Info($"[{Settings.Name}] [SAVE] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms, size: {data.Length}");
         }
 
         private void Load()
@@ -124,12 +143,7 @@ namespace ThermalOverhaul
             {
                 if (Entity.Storage.ContainsKey(StorageGuid))
                 {
-                    GridData data = MyAPIGateway.Utilities.SerializeFromBinary<GridData>(Convert.FromBase64String(Entity.Storage[StorageGuid]));
-
-                    for (int i = 0; i < data.temperature.Length; i++)
-                    {
-                        Thermals.list[PositionToIndex[data.position[i]]].Temperature = data.temperature[i];
-                    }
+                    Unpack(Entity.Storage[StorageGuid]);
                 }
             }
             catch
@@ -288,7 +302,7 @@ namespace ThermalOverhaul
 
 
             
-            long flat = b.Position.Flatten();
+            int flat = b.Position.Flatten();
             int index = PositionToIndex[flat];
             ThermalCell cell = Thermals.list[index];
             cell.ClearNeighbors();
@@ -363,7 +377,7 @@ namespace ThermalOverhaul
             //MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
             while (IterationIndex < target)
             {
-                ThermalCell cell = Thermals.list[(LoopDirection) ? IterationIndex : count - 1 - IterationIndex];
+                ThermalCell cell = Thermals.list[IterationIndex];
                 if (cell != null)
                 {
                     if (!ThermalCellUpdateComplete)
@@ -388,7 +402,6 @@ namespace ThermalOverhaul
             {
                 IterationIndex = 0;
                 IterationFrames = 0;
-                LoopDirection = !LoopDirection;
 
                 if (!ThermalCellUpdateComplete)
                     ThermalCellUpdateComplete = true;
@@ -435,14 +448,13 @@ namespace ThermalOverhaul
 
             }
 
-            // k * A * (dT / dX)
-            
-            cell.LastDeltaTemp = cell.kA * dt * cell.dxInverted * cell.SpacificHeatInverted;
-            cell.Temperature = Math.Max(0, cell.Temperature + cell.LastDeltaTemp);
-
             //float strength = (cell.Temperature / Settings.Instance.VaccumeFullStrengthTemperature);
             //float cool = Settings.Instance.VaccumDrainRate * cell.ExposedSurfaceArea * strength * cell.SpacificHeatRatio;
 
+
+            // k * A * (dT / dX)
+            cell.LastDeltaTemp = cell.kA * dt * cell.dxInverted * cell.SpacificHeatInverted;
+            cell.Temperature = Math.Max(0, cell.Temperature + cell.LastDeltaTemp);
 
             if (Settings.Debug)
             {
@@ -462,7 +474,7 @@ namespace ThermalOverhaul
         /// <returns></returns>
         public ThermalCell Get(Vector3I position)
         {
-            long flat = position.Flatten();
+            int flat = position.Flatten();
             if (PositionToIndex.ContainsKey(flat))
             {
                 return Thermals.list[PositionToIndex[flat]];
@@ -487,7 +499,7 @@ namespace ThermalOverhaul
             float red = (t / max);
             float blue = (1f - (t / max));
 
-            return new Color(red, (!LoopDirection && Settings.Instance.Frequency >= 60 ? 1 : 0), blue);
+            return new Color(red, (Settings.Instance.Frequency >= 60 ? 1 : 0), blue);
         }
     }
 }

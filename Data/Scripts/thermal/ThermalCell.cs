@@ -14,7 +14,7 @@ namespace ThermalOverhaul
 {
     public class ThermalCell
     {
-        public long Id;
+        public int Id;
 
         public long CurrentFrame;
         public float LastTemperature;

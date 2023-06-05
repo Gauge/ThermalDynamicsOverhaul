@@ -9,16 +9,17 @@ namespace ThermalOverhaul
 {
     internal static class Helper
     {
-        private const long size = 100000;
+        private const int size = 1024;
+        private const int sizeSquared = size * size;
 
         /// <summary>
         /// flattens the 3D array into a linear representation
         /// </summary>
         /// <param name="vector"></param>
         /// <returns></returns>
-        public static long Flatten(this Vector3I vector) 
+        public static int Flatten(this Vector3I vector) 
         {
-            return (size * size * vector.Z) + (size * vector.Y) + vector.X;
+            return (sizeSquared * vector.Z) + (size * vector.Y) + vector.X;
         }
 
         /// <summary>
@@ -28,8 +29,8 @@ namespace ThermalOverhaul
         /// <returns></returns>
         public static Vector3I Unflatten(this Vector3I vector, long flatVector)
         {
-            vector.Z = (int)(flatVector / (size * size));
-            flatVector -= (vector.Z * size * size);
+            vector.Z = (int)(flatVector / sizeSquared);
+            flatVector -= vector.Z * sizeSquared;
             
             vector.Y = (int)(flatVector / size);
             vector.Z = (int)(flatVector % size);
