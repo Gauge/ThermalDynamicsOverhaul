@@ -27,7 +27,6 @@ namespace ThermalOverhaul
         private MyCubeGrid Grid;
         public Dictionary<int, int> PositionToIndex;
         public MyFreeList<ThermalCell> Thermals;
-
         public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
 
         public GridMapper Mapper;
@@ -277,7 +276,21 @@ namespace ThermalOverhaul
 
         private void GridMerge(MyCubeGrid g1, MyCubeGrid g2) 
         {
-            MyLog.Default.Info($"[{Settings.Name}] Grid Merge - G1: {g1.EntityId} G2: {g2.EntityId}");
+            ThermalGrid tg1 = g1.GameLogic.GetAs<ThermalGrid>();
+            ThermalGrid tg2 = g2.GameLogic.GetAs<ThermalGrid>();
+
+            for (int i = 0; i < tg2.Thermals.UsedLength; i++)
+            {
+                ThermalCell c = tg2.Thermals.list[i];
+                if (c == null) continue;
+
+                int id = c.Block.Position.Flatten();
+                if (tg1.PositionToIndex.ContainsKey(id))
+                {
+                    tg1.Thermals.list[tg1.PositionToIndex[id]].Temperature = c.Temperature;
+                }
+
+            }
         }
 
         public override void UpdateOnceBeforeFrame()
