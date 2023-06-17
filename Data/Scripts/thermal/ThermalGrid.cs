@@ -298,7 +298,7 @@ namespace ThermalOverhaul
             if (Grid.Physics == null)
                 NeedsUpdate = MyEntityUpdateEnum.NONE;
 
-            //Load();
+           Load();
         }
 
         public override void UpdateBeforeSimulation()
