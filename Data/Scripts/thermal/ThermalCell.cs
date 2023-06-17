@@ -9,16 +9,21 @@ using VRage.Game.ModAPI;
 using VRageMath;
 using Sandbox.Definitions;
 using VRage.GameServices;
+using VRage.Utils;
+using SpaceEngineers.Game.ModAPI;
+using VRage.ModAPI;
+using Sandbox.Game.Entities;
 
 namespace ThermalOverhaul
 {
     public class ThermalCell
     {
         public int Id;
+        public long Frame;
 
-        public long CurrentFrame;
         public float LastTemperature;
         public float Temperature;
+        
         public float HeatGeneration;
         public float SpacificHeatInverted;
 
@@ -44,34 +49,7 @@ namespace ThermalOverhaul
         {
             Block = b;
             Id = b.Position.Flatten();
-
-            if (Block.FatBlock != null)
-            {
-                IMyCubeBlock fat = Block.FatBlock;
-
-                if (fat is IMyThrust)
-                {
-                    IMyThrust thrust = (fat as IMyThrust);
-                    thrust.ThrustChanged += OnThrustChanged;
-                    OnThrustChanged(thrust, 0, thrust.CurrentThrust);
-
-                }
-                else
-                {
-                    fat.Components.ComponentAdded += OnComponentAdded;
-                    fat.Components.ComponentRemoved += OnComponentRemoved;
-
-                    if (fat.Components.Contains(typeof(MyResourceSourceComponent)))
-                    {
-                        fat.Components.Get<MyResourceSourceComponent>().OutputChanged += PowerOutputChanged;
-                    }
-
-                    if (fat.Components.Contains(typeof(MyResourceSinkComponent)))
-                    {
-                        fat.Components.Get<MyResourceSinkComponent>().CurrentInputChanged += PowerInputChanged;
-                    }
-                }
-            }
+            SetupListeners();
 
             // k = Watts / (meters - kelven)
             k = p.Conductivity;
@@ -89,6 +67,148 @@ namespace ThermalOverhaul
             ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpacificHeatInverted;
             ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpacificHeatInverted;
             UpdateHeat();
+        }
+
+        private void SetupListeners() 
+        {
+            if (Block.FatBlock == null) return;
+
+            IMyCubeBlock fat = Block.FatBlock;
+            ThermalGrid g = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+
+            if (fat is IMyThrust)
+            {
+                IMyThrust thrust = (fat as IMyThrust);
+                thrust.ThrustChanged += OnThrustChanged;
+                OnThrustChanged(thrust, 0, thrust.CurrentThrust);
+
+            }
+            else
+            {
+                fat.Components.ComponentAdded += OnComponentAdded;
+                fat.Components.ComponentRemoved += OnComponentRemoved;
+
+                if (fat.Components.Contains(typeof(MyResourceSourceComponent)))
+                {
+                    fat.Components.Get<MyResourceSourceComponent>().OutputChanged += PowerOutputChanged;
+                }
+
+                if (fat.Components.Contains(typeof(MyResourceSinkComponent)))
+                {
+                    fat.Components.Get<MyResourceSinkComponent>().CurrentInputChanged += PowerInputChanged;
+                }
+            }
+
+            if (fat is IMyPistonBase)
+            {
+                (fat as IMyPistonBase).AttachedEntityChanged += GridGroupChanged;
+            }
+            else if (fat is IMyMotorBase)
+            {
+                (fat as IMyMotorBase).AttachedEntityChanged += GridGroupChanged;
+            }
+            else if (fat is IMyDoor)
+            {
+                (fat as IMyDoor).DoorStateChanged += (state) => g.Mapper.ExternalBlockReset();
+            }
+            else if (fat is IMyLandingGear)
+            {
+                // had to use this crappy method because the better method is broken
+                // KEEN!!! fix your code please!
+                IMyLandingGear gear = (fat as IMyLandingGear);
+                gear.StateChanged += (state) =>
+                {
+                    IMyEntity entity = gear.GetAttachedEntity();
+                    ThermalCell c = g.Get(gear.Position);
+
+                    // if the entity is not MyCubeGrid reset landing gear neighbors because we probably detached
+                    if (!(entity is MyCubeGrid))
+                    {
+                        c.ResetNeighbors();
+                        return;
+                    }
+
+                    // get the search area
+                    MyCubeGrid grid = entity as MyCubeGrid;
+                    ThermalGrid gtherms = grid.GameLogic.GetAs<ThermalGrid>();
+
+                    Vector3D oldMin = gear.CubeGrid.GridIntegerToWorld(new Vector3I(gear.Min.X, gear.Min.Y, gear.Min.Z));
+                    Vector3D oldMax = gear.CubeGrid.GridIntegerToWorld(new Vector3I(gear.Max.X, gear.Max.Y, gear.Min.Z));
+
+                    oldMax += gear.WorldMatrix.Down * (grid.GridSize + 0.2f);
+
+                    Vector3I min = grid.WorldToGridInteger(oldMin);
+                    Vector3I max = grid.WorldToGridInteger(oldMax);
+
+                    //MyLog.Default.Info($"[{Settings.Name}] min {min} max {max}");
+
+                    // look for active cells on the other grid that are inside the search area
+                    Vector3I temp = Vector3I.Zero;
+                    for (int x = min.X; x <= max.X; x++)
+                    {
+                        temp.X = x;
+                        for (int y = min.Y; y <= max.Y; y++)
+                        {
+                            temp.Y = y;
+                            for (int z = min.Z; z <= max.Z; z++)
+                            {
+                                temp.Z = z;
+
+                                ThermalCell ncell = gtherms.Get(temp);
+                                //MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
+                                if (ncell != null)
+                                {
+                                    // connect the cells found
+                                    ncell.Neighbors.Add(c);
+                                    ncell.CalculateSurface();
+                                    c.Neighbors.Add(ncell);
+                                }
+                            }
+                        }
+                    }
+
+                    c.CalculateSurface();
+                };
+            }
+        }
+
+        private void GridGroupChanged(IMyMechanicalConnectionBlock block)
+        {
+            ThermalGrid g = block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
+            ThermalCell cell = g.Get(block.Position);
+
+            //MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell {block.Position} IsAttached: {block.IsAttached} DoubleCheck: {block.Top != null}");
+
+            if (block.Top == null)
+            {
+                for (int i = 0; i < cell.Neighbors.Count; i++)
+                {
+                    ThermalCell ncell = cell.Neighbors[i];
+
+                    if (ncell.Block.CubeGrid != cell.Block.CubeGrid)
+                    {
+                        MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
+
+                        ncell.Neighbors.Remove(cell);
+                        ncell.CalculateSurface();
+                        cell.Neighbors.RemoveAt(i);
+                        break;
+                    }
+                }
+                cell.CalculateSurface();
+            }
+            else
+            {
+                ThermalCell ncell = block.Top.CubeGrid.GameLogic.GetAs<ThermalGrid>().Get(block.Top.Position);
+
+                MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, nGrid: {ncell.Block.CubeGrid.EntityId} nCell: {ncell.Block.Position}");
+
+                cell.Neighbors.Add(ncell);
+                cell.CalculateSurface();
+
+                ncell.Neighbors.Add(cell);
+                ncell.CalculateSurface();
+            }
         }
 
         private void OnThrustChanged(IMyThrust block, float old, float current)

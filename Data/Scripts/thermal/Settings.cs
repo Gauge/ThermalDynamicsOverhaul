@@ -62,8 +62,8 @@ namespace ThermalOverhaul
 					Type = "Generic",
 					Conductivity = 7000f,
 					SpacificHeat = 450f,
-                    ProducerWasteHeatPerWatt = 0.25f,
-                    ConsumerWasteHeatPerWatt = 1f,
+                    ProducerWasteHeatPerWatt = 1f,
+                    ConsumerWasteHeatPerWatt = 0.25f,
                 },
 
 				BlockConfig = new List<BlockProperties>() {
@@ -71,20 +71,20 @@ namespace ThermalOverhaul
 						Type = "MyObjectBuilder_Reactor",
 						Conductivity = 9000f,
 						SpacificHeat = 450f,
-						ProducerWasteHeatPerWatt = 0.25f,
-						ConsumerWasteHeatPerWatt = 1f,
+						ProducerWasteHeatPerWatt = 1f,
+						ConsumerWasteHeatPerWatt = 0.25f,
                     },
 
 					new BlockProperties {
 						Type = "MyObjectBuilder_ConveyorConnector",
-						Conductivity = 90000f,
-						SpacificHeat = 25f,
+						Conductivity = 9400f,
+						SpacificHeat = 100f,
                     },
 
 					new BlockProperties {
 						Type = "MyObjectBuilder_Conveyor",
-						Conductivity = 90000f,
-						SpacificHeat = 25f,
+						Conductivity = 9400f,
+						SpacificHeat = 100f,
                     },
 
 					

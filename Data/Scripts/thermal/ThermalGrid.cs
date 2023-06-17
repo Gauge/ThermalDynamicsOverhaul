@@ -1,4 +1,5 @@
-﻿using Sandbox.Definitions;
+﻿using ProtoBuf.Meta;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
@@ -27,6 +28,8 @@ namespace ThermalOverhaul
         public Dictionary<int, int> PositionToIndex;
         public MyFreeList<ThermalCell> Thermals;
 
+        public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
+
         public GridMapper Mapper;
 
         private int IterationFrames = 0;
@@ -46,12 +49,17 @@ namespace ThermalOverhaul
 
             Grid = Entity as MyCubeGrid;
 
+            
+
             if (Entity.Storage == null)
                 Entity.Storage = new MyModStorageComponent();
 
             PositionToIndex = new Dictionary<int, int>();
             Thermals = new MyFreeList<ThermalCell>();
             Mapper = new GridMapper(Grid);
+
+            Grid.OnGridSplit += GridSplit;
+            Grid.OnGridMerge += GridMerge;
 
             Grid.OnBlockAdded += BlockAdded;
             Grid.OnBlockRemoved += BlockRemoved;
@@ -157,6 +165,12 @@ namespace ThermalOverhaul
 
         private void BlockAdded(IMySlimBlock b)
         {
+            if (Grid.EntityId != b.CubeGrid.EntityId)
+            {
+                MyLog.Default.Info($"[{Settings.Name}] Adding Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
+                return;
+            }
+
             MyCubeBlockDefinition def = b.BlockDefinition as MyCubeBlockDefinition;
 
             // get block properties
@@ -199,86 +213,11 @@ namespace ThermalOverhaul
 
             cell.AssignNeighbors();
 
-            IMyCubeBlock fat = b.FatBlock;
-            if (fat is IMyPistonBase)
-            {
-                (fat as IMyPistonBase).AttachedEntityChanged += GridGroupChanged;
-            }
-            else if (fat is IMyMotorBase)
-            {
-                (fat as IMyMotorBase).AttachedEntityChanged += GridGroupChanged;
-            }
-            else if (fat is IMyLandingGear)
-            {
-                // had to use this crappy method because the better method is broken
-                // KEEN!!! fix your code please!
-                IMyLandingGear gear = (fat as IMyLandingGear);
-                gear.StateChanged += (state) =>
-                {
-                    IMyEntity entity = gear.GetAttachedEntity();
-                    ThermalCell c = Get(gear.Position);
-
-                    // if the entity is not MyCubeGrid reset landing gear neighbors because we probably detached
-                    if (!(entity is MyCubeGrid))
-                    {
-                        c.ResetNeighbors();
-                        return;
-                    }
-
-                    // get the search area
-                    MyCubeGrid grid = entity as MyCubeGrid;
-                    ThermalGrid gtherms = grid.GameLogic.GetAs<ThermalGrid>();
-
-                    Vector3D oldMin = gear.CubeGrid.GridIntegerToWorld(new Vector3I(gear.Min.X, gear.Min.Y, gear.Min.Z));
-                    Vector3D oldMax = gear.CubeGrid.GridIntegerToWorld(new Vector3I(gear.Max.X, gear.Max.Y, gear.Min.Z));
-
-                    oldMax += gear.WorldMatrix.Down * (grid.GridSize + 0.2f);
-
-                    Vector3I min = grid.WorldToGridInteger(oldMin);
-                    Vector3I max = grid.WorldToGridInteger(oldMax);
-
-                    //MyLog.Default.Info($"[{Settings.Name}] min {min} max {max}");
-
-                    // look for active cells on the other grid that are inside the search area
-                    Vector3I temp = Vector3I.Zero;
-                    for (int x = min.X; x <= max.X; x++)
-                    {
-                        temp.X = x;
-                        for (int y = min.Y; y <= max.Y; y++)
-                        {
-                            temp.Y = y;
-                            for (int z = min.Z; z <= max.Z; z++)
-                            {
-                                temp.Z = z;
-
-                                ThermalCell ncell = gtherms.Get(temp);
-                                //MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
-                                if (ncell != null)
-                                {
-                                    // connect the cells found
-                                    ncell.Neighbors.Add(c);
-                                    ncell.CalculateSurface();
-                                    c.Neighbors.Add(ncell);
-                                }
-                            }
-                        }
-                    }
-
-                    c.CalculateSurface();
-                };
-            }
-            else if (fat is IMyDoor)
-            {
-                (fat as IMyDoor).DoorStateChanged += (state) => Mapper.ExternalBlockReset();
-            }
-
-            //MyLog.Default.Info($"[{Settings.Name}] Added ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
+            MyLog.Default.Info($"[{Settings.Name}] Added {Grid.EntityId} ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
 
             int index = Thermals.Allocate();
-            PositionToIndex.Add(b.Position.Flatten(), index);
+            PositionToIndex.Add(cell.Id, index);
             Thermals.list[index] = cell;
-
-            //MyLog.Default.Info($"[{Settings.Name}] Added {b.Position} Index: {index} {type}/{subtype}");
 
             CountPerFrame = GetCountPerFrame();
             Mapper.ExternalBlockReset();
@@ -286,27 +225,28 @@ namespace ThermalOverhaul
 
         private void BlockRemoved(IMySlimBlock b)
         {
-            IMyCubeBlock fat = b.FatBlock;
-            if (fat is IMyPistonBase)
+            if (Grid.EntityId != b.CubeGrid.EntityId)
             {
-                (fat as IMyPistonBase).AttachedEntityChanged -= GridGroupChanged;
-            }
-            else if (fat is IMyMotorBase)
-            {
-                (fat as IMyMotorBase).AttachedEntityChanged -= GridGroupChanged;
-            }
-            else if (fat is IMyDoor)
-            {
-                (fat as IMyDoor).DoorStateChanged -= (state) => Mapper.ExternalBlockReset();
+                MyLog.Default.Info($"[{Settings.Name}] Removing Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
+                return;
             }
 
+            MyLog.Default.Info($"[{Settings.Name}] Removed {Grid.EntityId} ({b.Position.Flatten()}) {b.Position}");
 
-            
             int flat = b.Position.Flatten();
             int index = PositionToIndex[flat];
             ThermalCell cell = Thermals.list[index];
-            cell.ClearNeighbors();
 
+            if (RecentlyRemoved.ContainsKey(cell.Id))
+            {
+                RecentlyRemoved[cell.Id] = cell.Temperature;
+            }
+            else 
+            {
+                RecentlyRemoved.Add(cell.Id, cell.Temperature);
+            }
+
+            cell.ClearNeighbors();
             PositionToIndex.Remove(flat);
             Thermals.Free(index);
 
@@ -314,43 +254,30 @@ namespace ThermalOverhaul
             Mapper.ExternalBlockReset();
         }
 
-        private void GridGroupChanged(IMyMechanicalConnectionBlock block)
+        private void GridSplit(MyCubeGrid g1, MyCubeGrid g2)
         {
-            ThermalCell cell = Get(block.Position);
+            MyLog.Default.Info($"[{Settings.Name}] Grid Split - G1: {g1.EntityId} G2: {g2.EntityId}");
 
-            MyLog.Default.Info($"[{Settings.Name}] {block.Position} IsAttached: {block.IsAttached} DoubleCheck: {block.Top != null}");
+            ThermalGrid tg1 = g1.GameLogic.GetAs<ThermalGrid>();
+            ThermalGrid tg2 = g2.GameLogic.GetAs<ThermalGrid>();
 
-            if (block.Top == null)
+            for (int i = 0; i < tg2.Thermals.UsedLength; i++)
             {
-                for (int i = 0; i < cell.Neighbors.Count; i++)
+                ThermalCell c = tg2.Thermals.list[i];
+                if (c == null) continue;
+
+                if (tg1.RecentlyRemoved.ContainsKey(c.Id)) 
                 {
-                    ThermalCell ncell = cell.Neighbors[i];
-
-                    if (ncell.Block.CubeGrid != cell.Block.CubeGrid)
-                    {
-                        MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
-
-                        ncell.Neighbors.Remove(cell);
-                        ncell.CalculateSurface();
-                        cell.Neighbors.RemoveAt(i);
-                        break;
-                    }
+                    c.Temperature = tg1.RecentlyRemoved[c.Id];
+                    tg1.RecentlyRemoved.Remove(c.Id);
                 }
-                cell.CalculateSurface();
             }
-            else
-            {
-                ThermalGrid g = block.Top.CubeGrid.GameLogic.GetAs<ThermalGrid>();
-                ThermalCell ncell = g.Get(block.Top.Position);
 
-                MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
+        }
 
-                cell.Neighbors.Add(ncell);
-                cell.CalculateSurface();
-
-                ncell.Neighbors.Add(cell);
-                ncell.CalculateSurface();
-            }
+        private void GridMerge(MyCubeGrid g1, MyCubeGrid g2) 
+        {
+            MyLog.Default.Info($"[{Settings.Name}] Grid Merge - G1: {g1.EntityId} G2: {g2.EntityId}");
         }
 
         public override void UpdateOnceBeforeFrame()
@@ -358,14 +285,14 @@ namespace ThermalOverhaul
             if (Grid.Physics == null)
                 NeedsUpdate = MyEntityUpdateEnum.NONE;
 
-            Load();
+            //Load();
         }
 
         public override void UpdateBeforeSimulation()
         {
             IterationFrames++;
 
-            int count = Thermals.Count;
+            int count = Thermals.UsedLength;
             int target = count - IterationIndex;
             if (CountPerFrame < target)
             {
@@ -374,7 +301,7 @@ namespace ThermalOverhaul
 
             target += IterationIndex;
 
-            //MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
+            ////MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
             while (IterationIndex < target)
             {
                 ThermalCell cell = Thermals.list[IterationIndex];
@@ -426,7 +353,7 @@ namespace ThermalOverhaul
         /// </summary>
         private void UpdateTemperatures(ref ThermalCell cell)
         {
-            cell.CurrentFrame++;
+            cell.Frame++;
             cell.LastTemperature = cell.Temperature;
 
             // generate heat based on power usage
@@ -437,7 +364,7 @@ namespace ThermalOverhaul
             for (int i = 0; i < cell.Neighbors.Count; i++)
             {
                 ThermalCell ncell = cell.Neighbors[i];
-                if (ncell.CurrentFrame != cell.CurrentFrame)
+                if (ncell.Frame != cell.Frame)
                 {
                     dt += ncell.Temperature - cell.Temperature;
                 }
@@ -451,12 +378,12 @@ namespace ThermalOverhaul
             //float strength = (cell.Temperature / Settings.Instance.VaccumeFullStrengthTemperature);
             //float cool = Settings.Instance.VaccumDrainRate * cell.ExposedSurfaceArea * strength * cell.SpacificHeatRatio;
 
-
             // k * A * (dT / dX)
             cell.LastDeltaTemp = cell.kA * dt * cell.dxInverted * cell.SpacificHeatInverted;
             cell.Temperature = Math.Max(0, cell.Temperature + cell.LastDeltaTemp);
 
-            if (Settings.Debug)
+            
+            if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
                 //Vector3 c = GetTemperatureColor(cell.ExposedSurfaceArea / cell.Block.CubeGrid.GridSize / cell.Block.CubeGrid.GridSize).ColorToHSV();
                 Vector3 c = GetTemperatureColor(cell.Temperature).ColorToHSV();
@@ -465,6 +392,7 @@ namespace ThermalOverhaul
                     cell.Block.CubeGrid.ColorBlocks(cell.Block.Min, cell.Block.Max, c);
                 }
             }
+            
         }
 
         /// <summary>
@@ -481,11 +409,6 @@ namespace ThermalOverhaul
             }
 
             return null;
-        }
-
-        public float GetTemperature()
-        {
-            return 10000f;
         }
 
         public Color GetTemperatureColor(float temp)
