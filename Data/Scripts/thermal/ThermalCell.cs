@@ -23,7 +23,7 @@ namespace ThermalOverhaul
 
         public float LastTemperature;
         public float Temperature;
-        
+
         public float HeatGeneration;
         public float SpacificHeatInverted;
 
@@ -53,7 +53,7 @@ namespace ThermalOverhaul
 
             // k = Watts / (meters - kelven)
             k = p.Conductivity;
-            
+
             // A = surface area
             A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
             kA = k * A * Settings.Instance.TimeScaleRatio; // added the time scale ratio to save on compute power
@@ -69,7 +69,7 @@ namespace ThermalOverhaul
             UpdateHeat();
         }
 
-        private void SetupListeners() 
+        private void SetupListeners()
         {
             if (Block.FatBlock == null) return;
 
@@ -177,16 +177,20 @@ namespace ThermalOverhaul
             ThermalGrid g = block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
             ThermalCell cell = g.Get(block.Position);
 
+            if (cell == null) return;
+
             //MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell {block.Position} IsAttached: {block.IsAttached} DoubleCheck: {block.Top != null}");
 
             if (block.Top == null)
             {
-                for (int i = 0; i < cell.Neighbors.Count; i++)
+                try
                 {
-                    ThermalCell ncell = cell.Neighbors[i];
-
-                    if (ncell.Block.CubeGrid != cell.Block.CubeGrid)
+                    for (int i = 0; i < cell.Neighbors.Count; i++)
                     {
+                        ThermalCell ncell = cell.Neighbors[i];
+
+                        if (ncell.Block.CubeGrid == cell.Block.CubeGrid) continue;
+
                         MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
 
                         ncell.Neighbors.Remove(cell);
@@ -194,8 +198,12 @@ namespace ThermalOverhaul
                         cell.Neighbors.RemoveAt(i);
                         break;
                     }
+                    cell.CalculateSurface();
                 }
-                cell.CalculateSurface();
+                catch
+                {
+                    MyLog.Default.Info($"[{Settings.Name}] catch 2");
+                }
             }
             else
             {
