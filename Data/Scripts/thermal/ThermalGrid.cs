@@ -48,8 +48,6 @@ namespace ThermalOverhaul
 
             Grid = Entity as MyCubeGrid;
 
-            
-
             if (Entity.Storage == null)
                 Entity.Storage = new MyModStorageComponent();
 
@@ -212,7 +210,7 @@ namespace ThermalOverhaul
 
             cell.AssignNeighbors();
 
-            MyLog.Default.Info($"[{Settings.Name}] Added {Grid.EntityId} ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
+            //MyLog.Default.Info($"[{Settings.Name}] Added {Grid.EntityId} ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
 
             int index = Thermals.Allocate();
             PositionToIndex.Add(cell.Id, index);
@@ -226,11 +224,11 @@ namespace ThermalOverhaul
         {
             if (Grid.EntityId != b.CubeGrid.EntityId)
             {
-                MyLog.Default.Info($"[{Settings.Name}] Removing Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
+                //MyLog.Default.Info($"[{Settings.Name}] Removing Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
                 return;
             }
 
-            MyLog.Default.Info($"[{Settings.Name}] Removed {Grid.EntityId} ({b.Position.Flatten()}) {b.Position}");
+            //MyLog.Default.Info($"[{Settings.Name}] Removed {Grid.EntityId} ({b.Position.Flatten()}) {b.Position}");
 
             int flat = b.Position.Flatten();
             int index = PositionToIndex[flat];
@@ -399,7 +397,7 @@ namespace ThermalOverhaul
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
                 //Vector3 c = GetTemperatureColor(cell.ExposedSurfaceArea / cell.Block.CubeGrid.GridSize / cell.Block.CubeGrid.GridSize).ColorToHSV();
-                Vector3 c = GetTemperatureColor(cell.Temperature).ColorToHSV();
+                Vector3 c = GetTemperatureColor(cell.Temperature);
                 if (cell.Block.ColorMaskHSV != c)
                 {
                     cell.Block.CubeGrid.ColorBlocks(cell.Block.Min, cell.Block.Max, c);
@@ -424,18 +422,40 @@ namespace ThermalOverhaul
             return null;
         }
 
-        public Color GetTemperatureColor(float temp)
-        {
-            //float max = 6f;
-            float max = 100f;
-            // Clamp the temperature to the range 0-100
+
+
+        /// <summary>
+        /// Generates a heat map
+        /// </summary>
+        /// <param name="temp">current temperature</param>
+        /// <param name="max">maximum possible temprature</param>
+        /// <param name="low">0 is black this value is blue</param>
+        /// <param name="high">this value is red max value is white</param>
+        /// <returns>HSV Vector3</returns>
+        public Vector3 GetTemperatureColor(float temp, float max=2000, float low = 265f, float high = 600f)
+        {   
+            // Clamp the temperature to the range 0-max
             float t = Math.Max(0, Math.Min(max, temp));
 
-            // Calculate the red and blue values using a linear scale
-            float red = (t / max);
-            float blue = (1f - (t / max));
+            float h = 240f/360f;
+            float s = 1;
+            float v = 0.5f;
 
-            return new Color(red, (Settings.Instance.Frequency >= 60 ? 1 : 0), blue);
+            if (t < low)
+            {
+                v = (1.5f * (t / low)) - 1;
+            }
+            else if (t < high)
+            {
+                h = (240f - ((t-low) / (high - low) * 240f)) / 360f;
+            }
+            else 
+            {
+                h = 0;
+                s = 1 - (2 * ((t - high) / (max - high)));
+            }
+
+            return new Vector3(h, s, v);
         }
     }
 }
