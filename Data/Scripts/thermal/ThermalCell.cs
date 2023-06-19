@@ -13,6 +13,8 @@ using VRage.Utils;
 using SpaceEngineers.Game.ModAPI;
 using VRage.ModAPI;
 using Sandbox.Game.Entities;
+using Sandbox.Game;
+using System.ComponentModel;
 
 namespace ThermalOverhaul
 {
@@ -25,7 +27,7 @@ namespace ThermalOverhaul
         public float Temperature;
 
         public float HeatGeneration;
-        public float SpacificHeatInverted;
+        public float SpecificHeatInverted;
 
         public float PowerOutput;
         public float PowerInput;
@@ -40,9 +42,12 @@ namespace ThermalOverhaul
         public float ExposedSurfaceArea;
         public IMySlimBlock Block;
 
+        public float solarIntensity;
+
 
         public List<Vector3I> Exposed = new List<Vector3I>();
         public List<Vector3I> Inside = new List<Vector3I>();
+        public List<Vector3I> Outside = new List<Vector3I>();
         public List<ThermalCell> Neighbors = new List<ThermalCell>();
 
         public void Init(BlockProperties p, IMySlimBlock b)
@@ -61,11 +66,11 @@ namespace ThermalOverhaul
 
             if (p.SpacificHeat > 0)
             {
-                SpacificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
+                SpecificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
             }
 
-            ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpacificHeatInverted;
-            ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpacificHeatInverted;
+            ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+            ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
             UpdateHeat();
         }
 
@@ -183,33 +188,26 @@ namespace ThermalOverhaul
 
             if (block.Top == null)
             {
-                try
+                for (int i = 0; i < cell.Neighbors.Count; i++)
                 {
-                    for (int i = 0; i < cell.Neighbors.Count; i++)
-                    {
-                        ThermalCell ncell = cell.Neighbors[i];
+                    ThermalCell ncell = cell.Neighbors[i];
 
-                        if (ncell.Block.CubeGrid == cell.Block.CubeGrid) continue;
+                    if (ncell.Block.CubeGrid == cell.Block.CubeGrid) continue;
 
-                        MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
+                    //MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
 
-                        ncell.Neighbors.Remove(cell);
-                        ncell.CalculateSurface();
-                        cell.Neighbors.RemoveAt(i);
-                        break;
-                    }
-                    cell.CalculateSurface();
+                    ncell.Neighbors.Remove(cell);
+                    ncell.CalculateSurface();
+                    cell.Neighbors.RemoveAt(i);
+                    break;
                 }
-                catch
-                {
-                    MyLog.Default.Info($"[{Settings.Name}] catch 2");
-                }
+                cell.CalculateSurface();
             }
             else
             {
                 ThermalCell ncell = block.Top.CubeGrid.GameLogic.GetAs<ThermalGrid>().Get(block.Top.Position);
 
-                MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, nGrid: {ncell.Block.CubeGrid.EntityId} nCell: {ncell.Block.Position}");
+                //MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, nGrid: {ncell.Block.CubeGrid.EntityId} nCell: {ncell.Block.Position}");
 
                 cell.Neighbors.Add(ncell);
                 cell.CalculateSurface();
@@ -397,6 +395,7 @@ namespace ThermalOverhaul
         public void UpdateInsideBlocks(ref HashSet<Vector3I> external)
         {
             Inside.Clear();
+            Outside.Clear();
 
             //bool oxygenEnabled = MyAPIGateway.Session.SessionSettings.EnableOxygen;
             //ThermalGrid thermals = Block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
@@ -421,14 +420,127 @@ namespace ThermalOverhaul
                     //}
 
                 }
+                else 
+                {
+                    Outside.Add(block);
+                }
             }
 
-            ExposedSurfaceArea = (Exposed.Count - Inside.Count) * A;
+            ExposedSurfaceArea = Outside.Count * A;
         }
 
         public float GetTemperature()
         {
             return Temperature;
+        }
+
+        /// <summary>
+        /// Update the temperature of each cell in the grid
+        /// </summary>
+        internal void Update()
+        {
+            // 1. update last temperature
+            // 2. Calculate and apply heat exchange with neighbors
+            // 3. calculate and apply heat loss
+            // 4. Apply heat gain
+
+            Frame++;
+            LastTemperature = Temperature;
+
+            // Calculate the total heat gained or lost by the cell
+            float dt = 0;
+            for (int i = 0; i < Neighbors.Count; i++)
+            {
+                ThermalCell ncell = Neighbors[i];
+                if (ncell.Frame != Frame)
+                {
+                    dt += ncell.Temperature - Temperature;
+                }
+                else
+                {
+                    dt += ncell.LastTemperature - Temperature;
+                }
+
+            }
+
+            // k * A * (dT / dX)
+            LastDeltaTemp = kA * dt * dxInverted * SpecificHeatInverted;
+            Temperature = Math.Max(0, Temperature + LastDeltaTemp);
+
+            // calculate heat loss
+            //float strength = (cell.Temperature / Settings.Instance.VaccumeFullStrengthTemperature);
+            //float cool = Settings.Instance.VaccumDrainRate * cell.ExposedSurfaceArea * strength * cell.SpacificHeatRatio;
+
+            // generate heat based on power usage
+            //Temperature += HeatGeneration;
+
+            //Solar heat
+            Vector3 sunDirection = MyVisualScriptLogicProvider.GetSunDirection();
+            Vector3I pos = Block.Position;
+
+            solarIntensity = 0;
+            for (int i = 0; i < Outside.Count; i++)
+            {
+                Vector3I epos = Outside[i];
+                Vector3 direction = (Block.CubeGrid.GridIntegerToWorld(epos) - Block.CubeGrid.GridIntegerToWorld(pos)).Normalized();
+
+                float dot = Vector3.Dot(direction, sunDirection);
+
+                if (dot > 0)
+                {
+                    solarIntensity += dot;
+                }
+            }
+
+            Temperature += A * Settings.Instance.SolarEnergy * solarIntensity * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+
+
+            if (Settings.Debug && MyAPIGateway.Session.IsServer)
+            {
+                //Vector3 c = GetTemperatureColor(cell.ExposedSurfaceArea / cell.Block.CubeGrid.GridSize / cell.Block.CubeGrid.GridSize).ColorToHSV();
+                Vector3 c = GetTemperatureColor(solarIntensity, 8,1,2.5f);
+                if (Block.ColorMaskHSV != c)
+                {
+                    Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, c);
+                }
+            }
+
+            
+
+        }
+
+        /// <summary>
+        /// Generates a heat map
+        /// </summary>
+        /// <param name="temp">current temperature</param>
+        /// <param name="max">maximum possible temprature</param>
+        /// <param name="low">0 is black this value is blue</param>
+        /// <param name="high">this value is red max value is white</param>
+        /// <returns>HSV Vector3</returns>
+        public Vector3 GetTemperatureColor(float temp, float max = 2000, float low = 265f, float high = 600f)
+        {
+            // Clamp the temperature to the range 0-max
+            float t = Math.Max(0, Math.Min(max, temp));
+
+            float h = 240f / 360f;
+            float s = 1;
+            float v = 0.5f;
+
+            if (t < low)
+            {
+                v = (1.5f * (t / low)) - 1;
+            }
+            else if (t < high)
+            {
+                h = (240f - ((t - low) / (high - low) * 240f)) / 360f;
+            }
+            else
+            {
+                h = 0;
+                s = 1 - (2 * ((t - high) / (max - high)));
+            }
+
+            return new Vector3(h, s, v);
         }
 
         //private void CalculateSurface() 

@@ -1,5 +1,7 @@
-﻿using Sandbox.Game.Entities;
+﻿using Sandbox.Game;
+using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.SessionComponents;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
@@ -38,19 +40,19 @@ namespace ThermalOverhaul
 				if (cell == null)
 					return;
 
-				MyAPIGateway.Utilities.ShowNotification($"[Grid] Cell Count {tGrid.Thermals.Count}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Gen: {cell.HeatGeneration} Neighbors: {cell.Neighbors.Count} ratio: {cell.SpacificHeatInverted}", 1, "White");
 
 
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] Input: {cell.PowerInput} heat: {cell.PowerInput * cell.ConsumerGeneration} heatPerWatt: {cell.ConsumerGeneration}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] Output: {cell.PowerOutput} heat: {cell.PowerOutput * cell.ProducerGeneration} heatPerWatt: {cell.ProducerGeneration}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Gen: {cell.HeatGeneration} Neighbors: {cell.Neighbors.Count} ratio: {cell.SpecificHeatInverted}", 1, "White");
+				MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.solarIntensity}", 1, "White");
 
-				//Output: {cell.PowerOutput}
+                //MyAPIGateway.Utilities.ShowNotification($"[Cell] Input: {cell.PowerInput} heat: {cell.PowerInput * cell.ConsumerGeneration} heatPerWatt: {cell.ConsumerGeneration}", 1, "White");
+                //MyAPIGateway.Utilities.ShowNotification($"[Cell] Output: {cell.PowerOutput} heat: {cell.PowerOutput * cell.ProducerGeneration} heatPerWatt: {cell.ProducerGeneration}", 1, "White");
 
 
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count}  Inside: {cell.Inside.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[External] {tGrid.Mapper.Blocks.Count} EComplete: {tGrid.Mapper.ExternalRoomUpdateComplete} BComplete: {tGrid.ThermalCellUpdateComplete}", 1, "White");
-			}
+                //MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count}  Inside: {cell.Inside.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
+                //MyAPIGateway.Utilities.ShowNotification($"[External] {tGrid.Mapper.Blocks.Count} EComplete: {tGrid.Mapper.ExternalRoomUpdateComplete} BComplete: {tGrid.ThermalCellUpdateComplete}", 1, "White");
+            }
 		}
 	}
 }

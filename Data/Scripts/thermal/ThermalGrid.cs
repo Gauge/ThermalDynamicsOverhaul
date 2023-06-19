@@ -1,5 +1,6 @@
 ﻿using ProtoBuf.Meta;
 using Sandbox.Definitions;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
@@ -296,7 +297,7 @@ namespace ThermalOverhaul
             if (Grid.Physics == null)
                 NeedsUpdate = MyEntityUpdateEnum.NONE;
 
-           Load();
+            Load();
         }
 
         public override void UpdateBeforeSimulation()
@@ -323,7 +324,8 @@ namespace ThermalOverhaul
                         cell.UpdateInsideBlocks(ref Mapper.Blocks);
                     }
 
-                    UpdateTemperatures(ref cell);
+                    cell.Update();
+                    //UpdateTemperatures(ref cell);
                 }
 
                 IterationIndex++;
@@ -349,61 +351,12 @@ namespace ThermalOverhaul
                     Mapper.ExternalRoomUpdateComplete = true;
                     ThermalCellUpdateComplete = false;
                 }
-
             }
         }
 
         public int GetCountPerFrame()
         {
             return 1 + (Thermals.Count / Settings.Instance.Frequency);
-        }
-
-
-        /// <summary>
-        /// Update the temperature of each cell in the grid
-        /// </summary>
-        private void UpdateTemperatures(ref ThermalCell cell)
-        {
-            cell.Frame++;
-            cell.LastTemperature = cell.Temperature;
-
-            // generate heat based on power usage
-            cell.Temperature += cell.HeatGeneration;
-
-            // Calculate the total heat gained or lost by the cell
-            float dt = 0;
-            for (int i = 0; i < cell.Neighbors.Count; i++)
-            {
-                ThermalCell ncell = cell.Neighbors[i];
-                if (ncell.Frame != cell.Frame)
-                {
-                    dt += ncell.Temperature - cell.Temperature;
-                }
-                else 
-                {
-                    dt += ncell.LastTemperature - cell.Temperature;
-                }
-
-            }
-
-            //float strength = (cell.Temperature / Settings.Instance.VaccumeFullStrengthTemperature);
-            //float cool = Settings.Instance.VaccumDrainRate * cell.ExposedSurfaceArea * strength * cell.SpacificHeatRatio;
-
-            // k * A * (dT / dX)
-            cell.LastDeltaTemp = cell.kA * dt * cell.dxInverted * cell.SpacificHeatInverted;
-            cell.Temperature = Math.Max(0, cell.Temperature + cell.LastDeltaTemp);
-
-            
-            if (Settings.Debug && MyAPIGateway.Session.IsServer)
-            {
-                //Vector3 c = GetTemperatureColor(cell.ExposedSurfaceArea / cell.Block.CubeGrid.GridSize / cell.Block.CubeGrid.GridSize).ColorToHSV();
-                Vector3 c = GetTemperatureColor(cell.Temperature);
-                if (cell.Block.ColorMaskHSV != c)
-                {
-                    cell.Block.CubeGrid.ColorBlocks(cell.Block.Min, cell.Block.Max, c);
-                }
-            }
-            
         }
 
         /// <summary>
@@ -422,40 +375,5 @@ namespace ThermalOverhaul
             return null;
         }
 
-
-
-        /// <summary>
-        /// Generates a heat map
-        /// </summary>
-        /// <param name="temp">current temperature</param>
-        /// <param name="max">maximum possible temprature</param>
-        /// <param name="low">0 is black this value is blue</param>
-        /// <param name="high">this value is red max value is white</param>
-        /// <returns>HSV Vector3</returns>
-        public Vector3 GetTemperatureColor(float temp, float max=2000, float low = 265f, float high = 600f)
-        {   
-            // Clamp the temperature to the range 0-max
-            float t = Math.Max(0, Math.Min(max, temp));
-
-            float h = 240f/360f;
-            float s = 1;
-            float v = 0.5f;
-
-            if (t < low)
-            {
-                v = (1.5f * (t / low)) - 1;
-            }
-            else if (t < high)
-            {
-                h = (240f - ((t-low) / (high - low) * 240f)) / 360f;
-            }
-            else 
-            {
-                h = 0;
-                s = 1 - (2 * ((t - high) / (max - high)));
-            }
-
-            return new Vector3(h, s, v);
-        }
     }
 }

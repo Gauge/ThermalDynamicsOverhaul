@@ -29,19 +29,24 @@ namespace ThermalOverhaul
 		[ProtoMember(10)]
 		public int Frequency;
 
-		/// <summary>
-		/// The drain rate in watts per cubic meter of exposed surface
-		/// </summary>
-		[ProtoMember(50)]
+		[ProtoMember(20)]
+		public float SolarEnergy;
+
+        /// <summary>
+        /// The drain rate in watts per cubic meter of exposed surface
+        /// </summary>
+        [ProtoMember(50)]
 		public float VaccumDrainRate;
 
 		[ProtoMember(60)]
 		public float VaccumeFullStrengthTemperature;
 
-		/// <summary>
-		/// Used to adjust values that are calculated in seconds, to the current time scale 
-		/// </summary>
-		[XmlIgnore]
+
+
+        /// <summary>
+        /// Used to adjust values that are calculated in seconds, to the current time scale 
+        /// </summary>
+        [XmlIgnore]
 		public float TimeScaleRatio;
 
 		[ProtoMember(81)]
@@ -55,6 +60,7 @@ namespace ThermalOverhaul
 			Settings s = new Settings {
 				Version = 1,
 				Frequency = 1,
+				SolarEnergy = 100000f,
 				VaccumDrainRate = 100000f,
 				VaccumeFullStrengthTemperature = 100,
 
