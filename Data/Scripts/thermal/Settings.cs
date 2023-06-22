@@ -32,6 +32,9 @@ namespace ThermalOverhaul
 		[ProtoMember(20)]
 		public float SolarEnergy;
 
+		[ProtoMember(30)]
+		public float EnvironmentalRaycastDistance;
+
         /// <summary>
         /// The drain rate in watts per cubic meter of exposed surface
         /// </summary>
@@ -61,6 +64,7 @@ namespace ThermalOverhaul
 				Version = 1,
 				Frequency = 1,
 				SolarEnergy = 100000f,
+				EnvironmentalRaycastDistance = 5000f,
 				VaccumDrainRate = 100000f,
 				VaccumeFullStrengthTemperature = 100,
 

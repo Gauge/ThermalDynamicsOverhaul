@@ -34,17 +34,26 @@ namespace ThermalOverhaul
 
 				ThermalGrid tGrid = grid.GameLogic.GetAs<ThermalGrid>();
 				Vector3I position = grid.WorldToGridInteger(hit.Position + (matrix.Forward * 0.05f));
+				IMySlimBlock block = grid.GetCubeBlock(position);
 
-				ThermalCell cell = tGrid.Get(position);
+				if (block == null) return;
+
+				ThermalCell cell = tGrid.Get(block.Position);
 
 				if (cell == null)
 					return;
 
 
 
-				MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
+				//MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
 				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Gen: {cell.HeatGeneration} Neighbors: {cell.Neighbors.Count} ratio: {cell.SpecificHeatInverted}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.solarIntensity}", 1, "White");
+				//MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.SolarIntensity.ToString("n3")} Average: {tGrid.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
+
+                //Grid.AverageSolarHeat[directionIndex])
+
+                MyAPIGateway.Utilities.ShowNotification($"[Grid] Exposed: {tGrid.ExposedNodes.Count} {tGrid.ExposedSurface.Count} inside: {tGrid.InsideNodes.Count} {tGrid.InsideSurface.Count} Rooms: {tGrid.Rooms.Count}", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count} {cell.ExposedSurface.Count}  Inside: {cell.Inside.Count} {cell.InsideSurface.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
+
 
                 //MyAPIGateway.Utilities.ShowNotification($"[Cell] Input: {cell.PowerInput} heat: {cell.PowerInput * cell.ConsumerGeneration} heatPerWatt: {cell.ConsumerGeneration}", 1, "White");
                 //MyAPIGateway.Utilities.ShowNotification($"[Cell] Output: {cell.PowerOutput} heat: {cell.PowerOutput * cell.ProducerGeneration} heatPerWatt: {cell.ProducerGeneration}", 1, "White");
@@ -53,6 +62,6 @@ namespace ThermalOverhaul
                 //MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count}  Inside: {cell.Inside.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
                 //MyAPIGateway.Utilities.ShowNotification($"[External] {tGrid.Mapper.Blocks.Count} EComplete: {tGrid.Mapper.ExternalRoomUpdateComplete} BComplete: {tGrid.ThermalCellUpdateComplete}", 1, "White");
             }
-		}
+        }
 	}
 }

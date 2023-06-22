@@ -8,6 +8,7 @@ using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 using VRage.Game;
 using VRage.Game.Components;
@@ -20,23 +21,27 @@ using VRageMath;
 namespace ThermalOverhaul
 {
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_CubeGrid), true)]
-    public class ThermalGrid : MyGameLogicComponent
+    public partial class ThermalGrid : MyGameLogicComponent
     {
 
         private static readonly Guid StorageGuid = new Guid("f7cd64ae-9cd8-41f3-8e5d-3db992619343");
 
-        private MyCubeGrid Grid;
+        public MyCubeGrid Grid;
         public Dictionary<int, int> PositionToIndex;
         public MyFreeList<ThermalCell> Thermals;
         public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
-
-        public GridMapper Mapper;
+        public ThermalRadiationNode SolarRadiationNode;
+        private MyFreeList<ThermalRadiationNode> RadiationNodes;
 
         private int IterationFrames = 0;
         private int IterationIndex = 0;
         private int CountPerFrame = 0;
-
         public bool ThermalCellUpdateComplete = true;
+
+        public Vector3 FrameSolarDirection;
+        public MatrixD FrameMatrix;
+        public Vector3D FrameGridCenter;
+        public bool FrameSolarIsBlocked;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
@@ -54,7 +59,13 @@ namespace ThermalOverhaul
 
             PositionToIndex = new Dictionary<int, int>();
             Thermals = new MyFreeList<ThermalCell>();
-            Mapper = new GridMapper(Grid);
+            
+            if (RadiationNodes == null) 
+            {
+                RadiationNodes = new MyFreeList<ThermalRadiationNode>();
+            }
+
+            SolarRadiationNode = new ThermalRadiationNode();
 
             Grid.OnGridSplit += GridSplit;
             Grid.OnGridMerge += GridMerge;
@@ -198,15 +209,15 @@ namespace ThermalOverhaul
 
             if (block != null)
             {
-                cell.Init(block, b);
+                cell.Init(block, b, this);
             }
             else if (group != null)
             {
-                cell.Init(group, b);
+                cell.Init(group, b, this);
             }
             else
             {
-                cell.Init(Settings.Instance.Generic, b);
+                cell.Init(Settings.Instance.Generic, b, this);
             }
 
             cell.AssignNeighbors();
@@ -218,7 +229,7 @@ namespace ThermalOverhaul
             Thermals.list[index] = cell;
 
             CountPerFrame = GetCountPerFrame();
-            Mapper.ExternalBlockReset();
+            ExternalBlockReset();
         }
 
         private void BlockRemoved(IMySlimBlock b)
@@ -249,7 +260,7 @@ namespace ThermalOverhaul
             Thermals.Free(index);
 
             CountPerFrame = GetCountPerFrame();
-            Mapper.ExternalBlockReset();
+            ExternalBlockReset();
         }
 
         private void GridSplit(MyCubeGrid g1, MyCubeGrid g2)
@@ -297,6 +308,8 @@ namespace ThermalOverhaul
             if (Grid.Physics == null)
                 NeedsUpdate = MyEntityUpdateEnum.NONE;
 
+            AfterHeatTick();
+
             Load();
         }
 
@@ -313,7 +326,7 @@ namespace ThermalOverhaul
 
             target += IterationIndex;
 
-            ////MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
+            //MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
             while (IterationIndex < target)
             {
                 ThermalCell cell = Thermals.list[IterationIndex];
@@ -321,37 +334,70 @@ namespace ThermalOverhaul
                 {
                     if (!ThermalCellUpdateComplete)
                     {
-                        cell.UpdateInsideBlocks(ref Mapper.Blocks);
+                        cell.UpdateInsideBlocks(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
                     }
 
                     cell.Update();
-                    //UpdateTemperatures(ref cell);
                 }
 
                 IterationIndex++;
             }
 
-            int loopCount = 0;
-            while (Mapper.BlockQueue.Count > 0 && loopCount < Mapper.ExternalCountPerFrame)
-            {
-                Mapper.ExternalBlockCheck(Mapper.BlockQueue.Dequeue());
-                loopCount++;
-            }
+            MapExternalBlocks();
 
             if (IterationIndex >= count && IterationFrames >= Settings.Instance.Frequency)
             {
+                AfterHeatTick();
+
                 IterationIndex = 0;
                 IterationFrames = 0;
 
                 if (!ThermalCellUpdateComplete)
                     ThermalCellUpdateComplete = true;
 
-                if (!Mapper.ExternalRoomUpdateComplete && Mapper.BlockQueue.Count == 0)
+                if (!NodeUpdateComplete &&
+                    ExposedQueue.Count == 0 &&
+                    SolidQueue.Count == 0 &&
+                    InsideQueue.Count == 0)
                 {
-                    Mapper.ExternalRoomUpdateComplete = true;
+                    NodeUpdateComplete = true;
                     ThermalCellUpdateComplete = false;
                 }
             }
+        }
+
+        private void AfterHeatTick() 
+        {
+            FrameSolarDirection = MyVisualScriptLogicProvider.GetSunDirection();
+            FrameMatrix = Grid.WorldMatrix;
+            FrameGridCenter = Grid.PositionComp.WorldAABB.Center;
+            
+            SolarRadiationNode.Update();
+            for (int i = 0; i < RadiationNodes.UsedLength; i++) 
+            {
+                RadiationNodes.list[i]?.Update();
+            }
+
+            //Vector3D min = Grid.PositionComp.WorldAABB.Min;
+            //Vector3D max = Grid.PositionComp.WorldAABB.Max;
+
+            //var white = Color.White.ToVector4();
+            //MySimpleObjectDraw.DrawLine(FrameGridCenter, FrameGridCenter + (FrameSolarDirection * 4000), MyStringId.GetOrCompute("Square"), ref white, 0.05f);
+
+            //List<IMyEntity>
+            //MyGamePruningStructure.GetTopmostEntitiesOverlappingRay()
+
+            //IHitInfo hit;
+            //if (MyAPIGateway.Physics.CastLongRay(FrameGridCenter, FrameGridCenter + (FrameSolarDirection * 4000), out hit, true))
+            //{
+            //    FrameSolarIsBlocked = true;
+            //}
+            //else 
+            //{
+            //    FrameSolarIsBlocked = false;
+            //}
+
+            //FrameSolarIsBlocked = IsPathBlocked(ref min, ref max, FrameSolarDirection);
         }
 
         public int GetCountPerFrame()
@@ -374,6 +420,5 @@ namespace ThermalOverhaul
 
             return null;
         }
-
     }
 }
