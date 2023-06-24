@@ -13,8 +13,9 @@ using SpaceEngineers.Game.ModAPI;
 using VRage.ModAPI;
 using Sandbox.Game.Entities;
 using Sandbox.Game;
+using VRage.ObjectBuilders;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
     public class ThermalCell
     {
@@ -39,21 +40,33 @@ namespace ThermalOverhaul
         public float LastDeltaTemp;
         public float ExposedSurfaceArea;
 
+        public float CubeArea;
+        public float CubeAreaInv;
+
         public ThermalGrid Grid;
         public IMySlimBlock Block;
 
         public List<Vector3I> Exposed = new List<Vector3I>();
-        public List<Vector3> ExposedDirection = new List<Vector3>();
+        public List<Vector3I> ExposedSurface = new List<Vector3I>();
+        public List<Vector3I> ExposedSurfaceDirection = new List<Vector3I>();
         public List<Vector3I> Inside = new List<Vector3I>();
         public List<Vector3I> InsideSurface = new List<Vector3I>();
-        public List<Vector3I> ExposedSurface = new List<Vector3I>();
+
+
+
         public List<ThermalCell> Neighbors = new List<ThermalCell>();
 
-        public void Init(BlockProperties p, IMySlimBlock b, ThermalGrid g)
+
+
+        public ThermalCell(ThermalGrid g, IMySlimBlock b)
         {
             Grid = g;
             Block = b;
             Id = b.Position.Flatten();
+            ThermalCellDefinition p = ThermalCellDefinition.GetDefinition(Block.BlockDefinition.Id);
+
+            //TODO: the listeners need to handle changes at the end
+            //of the update cycle instead of whenever.
             SetupListeners();
 
             // k = Watts / (meters - kelven)
@@ -64,6 +77,11 @@ namespace ThermalOverhaul
             kA = k * A * Settings.Instance.TimeScaleRatio; // added the time scale ratio to save on compute power
             dxInverted = 1f / Block.CubeGrid.GridSize;
 
+            Vector3I size = (Block.Max - Block.Min) + 1;
+
+            CubeArea = 2 * (size.X * size.Z + size.Y * size.Z + size.X * size.Y);
+            CubeAreaInv = 1f/CubeArea;
+
             if (p.SpacificHeat > 0)
             {
                 SpecificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
@@ -73,6 +91,33 @@ namespace ThermalOverhaul
             ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
             UpdateHeat();
         }
+
+
+
+        //public void Init(ThermalCellDefinition p, IMySlimBlock b, ThermalGrid g)
+        //{
+        //    Grid = g;
+        //    Block = b;
+        //    Id = b.Position.Flatten();
+        //    SetupListeners();
+
+        //    // k = Watts / (meters - kelven)
+        //    k = p.Conductivity;
+
+        //    // A = surface area
+        //    A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
+        //    kA = k * A * Settings.Instance.TimeScaleRatio; // added the time scale ratio to save on compute power
+        //    dxInverted = 1f / Block.CubeGrid.GridSize;
+
+        //    if (p.SpacificHeat > 0)
+        //    {
+        //        SpecificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
+        //    }
+
+        //    ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+        //    ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+        //    UpdateHeat();
+        //}
 
         private void SetupListeners()
         {
@@ -319,13 +364,14 @@ namespace ThermalOverhaul
             }
         }
 
-        public void UpdateInsideBlocks(ref HashSet<Vector3I> exposed, ref HashSet<Vector3I> exposedSurface, ref HashSet<Vector3I> inside, ref HashSet<Vector3I> insideSurface)
+        public void UpdateSurfaces(ref HashSet<Vector3I> exposed, ref HashSet<Vector3I> exposedSurface, ref HashSet<Vector3I> inside, ref HashSet<Vector3I> insideSurface)
         {
             Inside.Clear();
             InsideSurface.Clear();
 
             Exposed.Clear();
             ExposedSurface.Clear();
+            ExposedSurfaceDirection.Clear();
 
             // define the cells area
             Vector3I min = Block.Min;
@@ -361,19 +407,23 @@ namespace ThermalOverhaul
                             if (exposedSurface.Contains(p))
                             {
                                 ExposedSurface.Add(p);
-
+                                Vector3I dir = Vector3I.Zero; 
                                 if (!xIn)
                                 {
-                                    ExposedDirection.Add(new Vector3(x == max.X ? 1 : -1, 0, 0));
+                                    dir.X = x == max.X ? 1 : -1;
                                 }
                                 else if (!yIn)
                                 {
-                                    ExposedDirection.Add(new Vector3(0, y == max.Y ? 1 : -1, 0));
+                                    dir.Y = y == max.Y ? 1 : -1;
                                 }
                                 else
                                 {
-                                    ExposedDirection.Add(new Vector3(0, 0, z == max.Z ? 1 : -1));
+                                    dir.Z = z == max.Z ? 1 : -1;
                                 }
+
+                                ExposedSurfaceDirection.Add(dir);
+
+
                             }
                         }
                         else if (inside.Contains(p))
@@ -404,16 +454,11 @@ namespace ThermalOverhaul
         /// </summary>
         internal void Update()
         {
-            // 1. update last temperature
-            // 2. Calculate and apply heat exchange with neighbors
-            // 3. calculate and apply heat loss
-            // 4. Apply heat gain
-
+            // update to the new frame
             Frame++;
             LastTemperature = Temperature;
 
-            // Calculate the total heat gained or lost by the cell
-
+            // calculate delta between all blocks
             float dt = 0;
             for (int i = 0; i < Neighbors.Count; i++)
             {
@@ -427,6 +472,10 @@ namespace ThermalOverhaul
                     dt += ncell.LastTemperature - Temperature;
                 }
             }
+            dt = dt * (CubeArea - Exposed.Count) * CubeAreaInv;
+
+            // calculate ambiant temprature
+            dt += (Grid.FrameAmbiantTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAirDensity;
 
             // k * A * (dT / dX)
             LastDeltaTemp = kA * dt * dxInverted * SpecificHeatInverted;
@@ -439,57 +488,58 @@ namespace ThermalOverhaul
             // generate heat based on power usage
             //Temperature += HeatGeneration;
 
-            float intensity = UpdateRadiationNodes();
+            // apply solar heating
+            float solarIntensity = UpdateRadiation(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
+            Temperature += A * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+
 
 
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
-                //Vector3 c = GetTemperatureColor(Temperature);
-                Vector3 c = GetTemperatureColor(intensity, 10, 0.5f, 4);
+                Vector3 c = Tools.GetTemperatureColor(Temperature);
+                //Vector3 c = Tools.GetTemperatureColor(intensity, 10, 0.5f, 4);
                 if (Block.ColorMaskHSV != c)
                 {
                     Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, c);
                 }
             }
         }
-
-        internal float UpdateRadiationNodes() 
+        internal float UpdateRadiation(ref Vector3 targetDirection, ref ThermalRadiationNode node) 
         {
             float intensity = 0;
             MatrixD matrix = Grid.FrameMatrix;
-            Vector3 sunDirection = Grid.FrameSolarDirection;
-            ThermalRadiationNode node = Grid.SolarRadiationNode;
+            bool isArmorBlock = Block.FatBlock == null;
+            //float gridSize = Grid.Grid.GridSize;
 
-            float gridSize = Grid.Grid.GridSize;
-            //Vector3D gridCenter = Grid.FrameGridCenter;
-            //Vector3D blockPosition = (Vector3D)(Vector3)Block.Position;
-
-            for (int i = 0; i < ExposedSurface.Count; i++)
+            for (int i = 0; i < ExposedSurfaceDirection.Count; i++)
             {
-                Vector3I s = ExposedSurface[i];
-                int directionIndex = (s.X > 0) ? 0 : (s.X < 0) ? 1 : (s.Y > 0) ? 2 : (s.Y < 0) ? 3 : (s.Z > 0) ? 4 : 5;
+                // calculate the surface direction
+                Vector3I direction = ExposedSurfaceDirection[i];
+                int directionIndex = Tools.DirectionToIndex(direction);
 
-                Vector3D startDirection = Vector3D.Rotate(ExposedDirection[i], matrix);
-                float dot = Vector3.Dot(startDirection, sunDirection);
+                Vector3D startDirection = Vector3D.Rotate(direction, matrix);
+                float dot = Vector3.Dot(startDirection, targetDirection);
 
+                
                 if (dot < 0)
                 {
                     dot = 0;
                     //Vector3D start = Vector3D.Transform((Vector3D)(Vector3)ExposedSurface[i] * gridSize, matrix);
                     //var white = Color.Red.ToVector4();
-                    //MySimpleObjectDraw.DrawLine(start, start + (startDirection * 0.5f), MyStringId.GetOrCompute("Square"), ref white, 0.008f);
+                    //MySimpleObjectDraw.DrawLine(start, start + (startDirection * 0.5f), MyStringId.GetOrCompute("Square"), ref white, 0.012f * gridSize);
                 }
-                //else
-                //{
-                //    Vector3D start = Vector3D.Transform((Vector3D)(Vector3)ExposedSurface[i] * gridSize, matrix);
-                //    var white = Color.White.ToVector4();
-                //    MySimpleObjectDraw.DrawLine(start, start + (startDirection), MyStringId.GetOrCompute("Square"), ref white, 0.008f);
-                //}        
-
-                if (Block.FatBlock == null)
+                else
                 {
+                    //Vector3D start = Vector3D.Transform((Vector3D)(Vector3)ExposedSurface[i] * gridSize, matrix);
+                    //var white = Color.White.ToVector4();
+                    //MySimpleObjectDraw.DrawLine(start, start + (startDirection), MyStringId.GetOrCompute("Square"), ref white, 0.0012f * gridSize);
+                }
+
+                if (isArmorBlock)
+                {
+                    // records the surface averages
                     node.Sides[directionIndex] += intensity;
-                    node.SideSurfaces[directionIndex]++;
+                    node.SideSurfaces[directionIndex]++; // should try to calculate this when UpdateSurfaces
                     intensity += dot;
                 }
                 else
@@ -498,91 +548,7 @@ namespace ThermalOverhaul
                 }
             }
 
-            Temperature += A * Settings.Instance.SolarEnergy * intensity * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-
             return intensity;
         }
-
-        /// <summary>
-        /// Generates a heat map
-        /// </summary>
-        /// <param name="temp">current temperature</param>
-        /// <param name="max">maximum possible temprature</param>
-        /// <param name="low">0 is black this value is blue</param>
-        /// <param name="high">this value is red max value is white</param>
-        /// <returns>HSV Vector3</returns>
-        public Vector3 GetTemperatureColor(float temp, float max = 2000, float low = 265f, float high = 600f)
-        {
-            // Clamp the temperature to the range 0-max
-            float t = Math.Max(0, Math.Min(max, temp));
-
-            float h = 240f / 360f;
-            float s = 1;
-            float v = 0.5f;
-
-            if (t < low)
-            {
-                v = (1.5f * (t / low)) - 1;
-            }
-            else if (t < high)
-            {
-                h = (240f - ((t - low) / (high - low) * 240f)) / 360f;
-            }
-            else
-            {
-                h = 0;
-                s = 1 - (2 * ((t - high) / (max - high)));
-            }
-
-            return new Vector3(h, s, v);
-        }
-
-        //private void CalculateSurface() 
-        //{
-        //	//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} Begin Calculate Surface");
-        //	Vector3I blockArea = (Block.Max+1) - Block.Min;
-
-        //	int volume = 0;
-        //	Vector3I minx = new Vector3I(Block.Min.X - 1, Block.Min.Y, Block.Min.Z);
-        //	Vector3I maxx = new Vector3I(Block.Max.X + 2, Block.Max.Y+1, Block.Max.Z+1);
-        //	BoundingBoxI SearchAreaX = new BoundingBoxI(minx, maxx);
-
-        //	volume += SearchAreaX.Size.Volume() - blockArea.Volume();
-
-        //	Vector3I miny = new Vector3I(Block.Min.X, Block.Min.Y - 1, Block.Min.Z);
-        //	Vector3I maxy = new Vector3I(Block.Max.X+1, Block.Max.Y + 2, Block.Max.Z+1);
-        //	BoundingBoxI SearchAreaY = new BoundingBoxI(miny, maxy);
-
-        //	volume += SearchAreaY.Size.Volume() - blockArea.Volume();
-
-        //	Vector3I minz = new Vector3I(Block.Min.X, Block.Min.Y, Block.Min.Z - 1);
-        //	Vector3I maxz = new Vector3I(Block.Max.X+1, Block.Max.Y+1, Block.Max.Z + 2);
-        //	BoundingBoxI SearchAreaZ = new BoundingBoxI(minz, maxz);
-
-        //	volume += SearchAreaZ.Size.Volume() - blockArea.Volume();
-
-        //	//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} {volume}");
-
-        //	for (int i = 0; i < Neighbors.Count; i++)
-        //	{
-        //		ThermalCell ncell = Neighbors[i];
-
-        //		var def = (ncell.Block.BlockDefinition as MyCubeBlockDefinition);
-        //		if (def != null && def.IsAirTight.HasValue && def.IsAirTight.Value)
-        //		{
-        //			BoundingBoxI ncellBox = new BoundingBoxI(ncell.Block.Min, ncell.Block.Max + 1);
-
-        //			volume -= ncellBox.Intersect(SearchAreaX).Size.Volume();
-        //			volume -= ncellBox.Intersect(SearchAreaY).Size.Volume();
-        //			volume -= ncellBox.Intersect(SearchAreaZ).Size.Volume();
-        //		}
-
-        //		//MyLog.Default.Info($"[{Settings.Name}] {Block.Position} {volume}");
-        //	}
-
-        //	ExposedSurfaceArea = volume * Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-
-        //}
-
     }
 }

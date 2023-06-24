@@ -1,4 +1,5 @@
-﻿using Sandbox.Game;
+﻿using Draygo.BlockExtensionsAPI;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.SessionComponents;
@@ -11,12 +12,31 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRageMath;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
 	[MySessionComponentDescriptor(MyUpdateOrder.Simulation, 100)]
-	public class Player : MySessionComponentBase
+	public class Session : MySessionComponentBase
 	{
-		public override void Simulate()
+
+        public static DefinitionExtensionsAPI Definitions;
+        public Session()
+        {
+            Definitions = new DefinitionExtensionsAPI(Done);
+        }
+
+        private void Done()
+        {
+
+        }
+
+        protected override void UnloadData()
+        {
+            Definitions?.UnloadData();
+
+            base.UnloadData();
+        }
+
+        public override void Simulate()
 		{
 
 			if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated)
@@ -45,14 +65,15 @@ namespace ThermalOverhaul
 
 
 
-				//MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
-				MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Gen: {cell.HeatGeneration} Neighbors: {cell.Neighbors.Count} ratio: {cell.SpecificHeatInverted}", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification($"[Environment] Temperature: {tGrid.FrameAmbiantTemprature.ToString("n3")} Solar Decay: {tGrid.FrameSolarDecay.ToString("n3")} Air Density: {tGrid.FrameAirDensity}", 1, "White");
+                //MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Gen: {cell.HeatGeneration} Neighbors: {cell.Neighbors.Count} ratio: {cell.SpecificHeatInverted}", 1, "White");
 				//MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.SolarIntensity.ToString("n3")} Average: {tGrid.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
 
                 //Grid.AverageSolarHeat[directionIndex])
 
-                MyAPIGateway.Utilities.ShowNotification($"[Grid] Exposed: {tGrid.ExposedNodes.Count} {tGrid.ExposedSurface.Count} inside: {tGrid.InsideNodes.Count} {tGrid.InsideSurface.Count} Rooms: {tGrid.Rooms.Count}", 1, "White");
-                MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count} {cell.ExposedSurface.Count}  Inside: {cell.Inside.Count} {cell.InsideSurface.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
+                //MyAPIGateway.Utilities.ShowNotification($"[Grid] Exposed: {tGrid.ExposedNodes.Count} {tGrid.ExposedSurface.Count} inside: {tGrid.InsideNodes.Count} {tGrid.InsideSurface.Count} Rooms: {tGrid.Rooms.Count}", 1, "White");
+                //MyAPIGateway.Utilities.ShowNotification($"[Cell] Exposed: {cell.Exposed.Count} {cell.ExposedSurface.Count}  Inside: {cell.Inside.Count} {cell.InsideSurface.Count} SurfaceArea: {cell.ExposedSurfaceArea}", 1, "White");
 
 
                 //MyAPIGateway.Utilities.ShowNotification($"[Cell] Input: {cell.PowerInput} heat: {cell.PowerInput * cell.ConsumerGeneration} heatPerWatt: {cell.ConsumerGeneration}", 1, "White");

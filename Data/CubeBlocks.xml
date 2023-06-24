@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<CubeBlocks>
+		<Definition>
+			<Id>
+				<TypeId>EnvironmentDefinition</TypeId>
+				<SubtypeId>DefaultThermodynamics</SubtypeId>
+			</Id>
+
+			<ModExtensions>
+				<Group Name="ThermalBlockProperties">
+					<Decimal Name="Conductivity" Value="7000" />
+					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="ProducerHeatPerWatt" Value="1" />
+					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+				</Group>
+			</ModExtensions>
+		</Definition>
+
+		<Definition>
+			<Id>
+				<TypeId>Reactor</TypeId>
+				<SubtypeId>DefaultThermodynamics</SubtypeId>
+			</Id>
+
+			<ModExtensions>
+				<Group Name="ThermalBlockProperties">
+					<Decimal Name="Conductivity" Value="9000" />
+					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="ProducerHeatPerWatt" Value="1" />
+					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+				</Group>
+			</ModExtensions>
+		</Definition>
+
+		<Definition>
+			<Id>
+				<TypeId>Conveyor</TypeId>
+				<SubtypeId>DefaultThermodynamics</SubtypeId>
+			</Id>
+
+			<ModExtensions>
+				<Group Name="ThermalBlockProperties">
+					<Decimal Name="Conductivity" Value="9000" />
+					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="ProducerHeatPerWatt" Value="1" />
+					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+				</Group>
+			</ModExtensions>
+		</Definition>
+
+		<Definition>
+			<Id>
+				<TypeId>ConveyorConnector</TypeId>
+				<SubtypeId>DefaultThermodynamics</SubtypeId>
+			</Id>
+
+			<ModExtensions>
+				<Group Name="ThermalBlockProperties">
+					<Decimal Name="Conductivity" Value="9000" />
+					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="ProducerHeatPerWatt" Value="1" />
+					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+				</Group>
+			</ModExtensions>
+		</Definition>
+	</CubeBlocks>
+</Definitions>

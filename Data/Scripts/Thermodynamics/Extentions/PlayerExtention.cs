@@ -8,7 +8,7 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRageMath;
 
-using ThermalOverhaul;
+using Thermodynamics;
 using VRage.Utils;
 
 namespace ThermalOverhaulExtention
@@ -37,8 +37,8 @@ namespace ThermalOverhaulExtention
                 Vector3I position = grid.WorldToGridInteger(hit.Position + matrix.Forward * 0.05f);
 
                 MyAPIGateway.Utilities.ShowNotification($"[Extention] GameLogic Type: {grid.GameLogic.GetType()}", 1, "White");
-                MyAPIGateway.Utilities.ShowNotification($"[Extention] GameLogic As ThermalGrid: {grid.GameLogic as ThermalOverhaul.ThermalGrid}", 1, "White");
-                MyAPIGateway.Utilities.ShowNotification($"[Extention] GameLogic As IThermalGrid: {grid.GameLogic as ThermalOverhaul.IThermalGrid}", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification($"[Extention] GameLogic As ThermalGrid: {grid.GameLogic as Thermodynamics.ThermalGrid}", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification($"[Extention] GameLogic As IThermalGrid: {grid.GameLogic as Thermodynamics.IThermalGrid}", 1, "White");
 
                 //MyLog.Default.Info($"GameLogic is Composite: {grid.GameLogic is MyCompositeGameLogicComponent}");
                 //MyAPIGateway.Utilities.ShowNotification($"[Extention] GameLogic Type: {grid.GameLogic.GetType()}", 1, "White");

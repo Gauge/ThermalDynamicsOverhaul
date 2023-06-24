@@ -14,7 +14,7 @@ using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
     public partial class ThermalGrid : MyGameLogicComponent
     {

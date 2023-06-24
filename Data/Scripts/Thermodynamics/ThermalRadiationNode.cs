@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using VRageMath;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
     public class ThermalRadiationNode
     {

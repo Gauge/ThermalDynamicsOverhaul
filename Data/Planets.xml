@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<CubeBlocks>
+		<Definition>
+			<Id>
+				<TypeId>PlanetGeneratorDefinition</TypeId>
+				<SubtypeId>DefaultThermodynamics</SubtypeId>
+			</Id>
+
+			<ModExtensions>
+				<Group Name="ThermalPlanetProperties">
+					<!--The ambiant temperature when the sun is on the opposite side of the planet-->
+					<Decimal Name="NightTemperature" Value="300" />
+					<!--The ambiant temperature when the sun is directly overhead-->
+					<Decimal Name="DayTemperature" Value="500" />
+					<!--The ambiant temperature when underground-->
+					<Decimal Name="UndergroundTemperature" Value="325" />
+					<!--The temperature at the center of the planet-->
+					<Decimal Name="CoreTemperature" Value="3000" />
+					<!--The distance below sealevel that remains underground temperatures-->
+					<Decimal Name="SealevelDeadzone" Value="2000" />
+					<!--
+					A value between 0 and 1
+					Represents the percentage of solar engery that will be lost in full atomosphere 
+					-->
+					<Decimal Name="SolarDecay" Value="0.5" />
+				</Group>
+			</ModExtensions>
+		</Definition>
+		
+		
+	</CubeBlocks>
+</Definitions>

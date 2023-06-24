@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
 	public class MyFreeList<TItem>
 	{

@@ -4,23 +4,26 @@ using System.IO;
 using System.Xml.Serialization;
 using ProtoBuf;
 using Sandbox.ModAPI;
+using VRage.Game;
 using VRage.Utils;
 using VRageMath;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
 	[ProtoContract]
 	public class Settings
 	{
-		public const string Filename = "ThermalDynamicsConfig.cfg";
-		public const string Name = "Thermal Dynamics";
+		public const string Filename = "ThermodynamicsConfig.cfg";
+		public const string Name = "Thermodynamics";
 		public const bool Debug = true;
 
 		public const float SecondsPerFrame = 1f / 60f;
 
 		public static Settings Instance;
 
-		[ProtoMember(1)]
+        public static readonly MyStringHash DefaultSubtypeId = MyStringHash.GetOrCompute("DefaultThermodynamics");
+
+        [ProtoMember(1)]
 		public int Version;
 
 		/// <summary>
@@ -44,6 +47,8 @@ namespace ThermalOverhaul
 		[ProtoMember(60)]
 		public float VaccumeFullStrengthTemperature;
 
+		[ProtoMember(70)]
+		public float VaccumeRadiationStrength;
 
 
         /// <summary>
@@ -52,53 +57,14 @@ namespace ThermalOverhaul
         [XmlIgnore]
 		public float TimeScaleRatio;
 
-		[ProtoMember(81)]
-		public BlockProperties Generic;
-
-		[ProtoMember(100)]
-		public List<BlockProperties> BlockConfig;
-
 		public static Settings GetDefaults()
 		{
 			Settings s = new Settings {
 				Version = 1,
 				Frequency = 1,
-				SolarEnergy = 100000f,
+				SolarEnergy = 1000000f,
 				EnvironmentalRaycastDistance = 5000f,
-				VaccumDrainRate = 100000f,
-				VaccumeFullStrengthTemperature = 100,
-
-				Generic = new BlockProperties {
-					Type = "Generic",
-					Conductivity = 7000f,
-					SpacificHeat = 450f,
-                    ProducerWasteHeatPerWatt = 1f,
-                    ConsumerWasteHeatPerWatt = 0.25f,
-                },
-
-				BlockConfig = new List<BlockProperties>() {
-					new BlockProperties { 
-						Type = "MyObjectBuilder_Reactor",
-						Conductivity = 9000f,
-						SpacificHeat = 450f,
-						ProducerWasteHeatPerWatt = 1f,
-						ConsumerWasteHeatPerWatt = 0.25f,
-                    },
-
-					new BlockProperties {
-						Type = "MyObjectBuilder_ConveyorConnector",
-						Conductivity = 9400f,
-						SpacificHeat = 100f,
-                    },
-
-					new BlockProperties {
-						Type = "MyObjectBuilder_Conveyor",
-						Conductivity = 9400f,
-						SpacificHeat = 100f,
-                    },
-
-					
-				},
+				VaccumeRadiationStrength = 0.0005f,
 			};
 
 			s.Init();

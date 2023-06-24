@@ -5,7 +5,7 @@ using System.Text;
 using VRage.Noise.Combiners;
 using VRageMath;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
     internal static class Helper
     {

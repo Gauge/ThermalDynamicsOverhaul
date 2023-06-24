@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
+using System.Transactions;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
@@ -18,7 +19,7 @@ using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
 
-namespace ThermalOverhaul
+namespace Thermodynamics
 {
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_CubeGrid), true)]
     public partial class ThermalGrid : MyGameLogicComponent
@@ -42,6 +43,9 @@ namespace ThermalOverhaul
         public MatrixD FrameMatrix;
         public Vector3D FrameGridCenter;
         public bool FrameSolarIsBlocked;
+        public float FrameAmbiantTemprature;
+        public float FrameSolarDecay;
+        public float FrameAirDensity;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
@@ -59,8 +63,8 @@ namespace ThermalOverhaul
 
             PositionToIndex = new Dictionary<int, int>();
             Thermals = new MyFreeList<ThermalCell>();
-            
-            if (RadiationNodes == null) 
+
+            if (RadiationNodes == null)
             {
                 RadiationNodes = new MyFreeList<ThermalRadiationNode>();
             }
@@ -112,7 +116,7 @@ namespace ThermalOverhaul
             return Convert.ToBase64String(bytes);
         }
 
-        private void Unpack(string data) 
+        private void Unpack(string data)
         {
             byte[] bytes = Convert.FromBase64String(data);
 
@@ -128,9 +132,9 @@ namespace ThermalOverhaul
                 f |= bytes[i + 6] << 16;
                 f |= bytes[i + 7] << 24;
 
-                Thermals.list[PositionToIndex[id]].Temperature = f * 0.0001f;    
+                Thermals.list[PositionToIndex[id]].Temperature = f * 0.0001f;
             }
-        } 
+        }
 
         private void Save()
         {
@@ -180,45 +184,48 @@ namespace ThermalOverhaul
                 return;
             }
 
-            MyCubeBlockDefinition def = b.BlockDefinition as MyCubeBlockDefinition;
-
-            // get block properties
-            string type = def.Id.TypeId.ToString();
-            string subtype = def.Id.SubtypeId.ToString();
-
-            BlockProperties group = null;
-            BlockProperties block = null;
+            ThermalCell cell = new ThermalCell(this, b);
 
 
-            foreach (BlockProperties bp in Settings.Instance.BlockConfig)
-            {
-                if (bp.Type != type)
-                    continue;
+            //MyCubeBlockDefinition def = b.BlockDefinition as MyCubeBlockDefinition;
 
-                if (string.IsNullOrWhiteSpace(bp.Subtype))
-                {
-                    group = bp;
-                }
-                else if (bp.Subtype == subtype)
-                {
-                    block = bp;
-                    break;
-                }
-            }
-            ThermalCell cell = new ThermalCell();
+            //// get block properties
+            //string type = def.Id.TypeId.ToString();
+            //string subtype = def.Id.SubtypeId.ToString();
 
-            if (block != null)
-            {
-                cell.Init(block, b, this);
-            }
-            else if (group != null)
-            {
-                cell.Init(group, b, this);
-            }
-            else
-            {
-                cell.Init(Settings.Instance.Generic, b, this);
-            }
+            //ThermalCellDefinition group = null;
+            //ThermalCellDefinition block = null;
+
+
+            //foreach (ThermalCellDefinition bp in Settings.Instance.BlockConfig)
+            //{
+            //    if (bp.Type != type)
+            //        continue;
+
+            //    if (string.IsNullOrWhiteSpace(bp.Subtype))
+            //    {
+            //        group = bp;
+            //    }
+            //    else if (bp.Subtype == subtype)
+            //    {
+            //        block = bp;
+            //        break;
+            //    }
+            //}
+            //ThermalCell cell = new ThermalCell();
+
+            //if (block != null)
+            //{
+            //    cell.Init(block, b, this);
+            //}
+            //else if (group != null)
+            //{
+            //    cell.Init(group, b, this);
+            //}
+            //else
+            //{
+            //    cell.Init(Settings.Instance.Generic, b, this);
+            //}
 
             cell.AssignNeighbors();
 
@@ -250,7 +257,7 @@ namespace ThermalOverhaul
             {
                 RecentlyRemoved[cell.Id] = cell.Temperature;
             }
-            else 
+            else
             {
                 RecentlyRemoved.Add(cell.Id, cell.Temperature);
             }
@@ -275,7 +282,7 @@ namespace ThermalOverhaul
                 ThermalCell c = tg2.Thermals.list[i];
                 if (c == null) continue;
 
-                if (tg1.RecentlyRemoved.ContainsKey(c.Id)) 
+                if (tg1.RecentlyRemoved.ContainsKey(c.Id))
                 {
                     c.Temperature = tg1.RecentlyRemoved[c.Id];
                     tg1.RecentlyRemoved.Remove(c.Id);
@@ -284,7 +291,7 @@ namespace ThermalOverhaul
 
         }
 
-        private void GridMerge(MyCubeGrid g1, MyCubeGrid g2) 
+        private void GridMerge(MyCubeGrid g1, MyCubeGrid g2)
         {
             ThermalGrid tg1 = g1.GameLogic.GetAs<ThermalGrid>();
             ThermalGrid tg2 = g2.GameLogic.GetAs<ThermalGrid>();
@@ -334,7 +341,7 @@ namespace ThermalOverhaul
                 {
                     if (!ThermalCellUpdateComplete)
                     {
-                        cell.UpdateInsideBlocks(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
+                        cell.UpdateSurfaces(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
                     }
 
                     cell.Update();
@@ -366,17 +373,46 @@ namespace ThermalOverhaul
             }
         }
 
-        private void AfterHeatTick() 
+        private void AfterHeatTick()
         {
             FrameSolarDirection = MyVisualScriptLogicProvider.GetSunDirection();
             FrameMatrix = Grid.WorldMatrix;
             FrameGridCenter = Grid.PositionComp.WorldAABB.Center;
-            
+
             SolarRadiationNode.Update();
-            for (int i = 0; i < RadiationNodes.UsedLength; i++) 
+            for (int i = 0; i < RadiationNodes.UsedLength; i++)
             {
                 RadiationNodes.list[i]?.Update();
             }
+
+            Vector3D position = Grid.PositionComp.GetPosition();
+            PlanetManager.Planet p = PlanetManager.GetClosestPlanet(position);
+
+            if (p == null) return;
+
+            float airDensity = p.Entity.GetAirDensity(position);
+
+            Vector3 local = (position - p.Position);
+            Vector3D surfacePoint = p.Entity.GetClosestSurfacePointLocal(ref local) + p.Position;
+
+
+
+            float ambiant = p.Definition.UndergroundTemperature;
+            if (local.LengthSquared() > surfacePoint.LengthSquared()) 
+            {
+                float dot = (float)Vector3D.Dot(local.Normalized(), FrameSolarDirection);
+                ambiant = p.Definition.NightTemperature + ((dot + 1f) * 0.5f * (p.Definition.DayTemperature-p.Definition.NightTemperature));
+            }
+
+            FrameAmbiantTemprature = ambiant * airDensity;
+            FrameSolarDecay = p.Definition.SolarDecay * airDensity;
+            FrameAirDensity = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
+
+            //TODO: implement underground core temparatures
+
+
+
+
 
             //Vector3D min = Grid.PositionComp.WorldAABB.Min;
             //Vector3D max = Grid.PositionComp.WorldAABB.Max;
@@ -399,6 +435,16 @@ namespace ThermalOverhaul
 
             //FrameSolarIsBlocked = IsPathBlocked(ref min, ref max, FrameSolarDirection);
         }
+
+        //public bool IsSolarOccluded()
+        //{
+        //    if (Grid.IsSolarOccluded) 
+        //    {
+        //        return true;
+        //    }
+
+        //    return false;
+        //}
 
         public int GetCountPerFrame()
         {
