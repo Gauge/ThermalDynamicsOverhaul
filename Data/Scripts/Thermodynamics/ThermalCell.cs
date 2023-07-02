@@ -475,7 +475,7 @@ namespace Thermodynamics
             dt = dt * (CubeArea - Exposed.Count) * CubeAreaInv;
 
             // calculate ambiant temprature
-            dt += (Grid.FrameAmbiantTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAirDensity;
+            dt += (Grid.FrameAmbientTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAmbientStrength;
 
             // k * A * (dT / dX)
             LastDeltaTemp = kA * dt * dxInverted * SpecificHeatInverted;
@@ -489,15 +489,16 @@ namespace Thermodynamics
             //Temperature += HeatGeneration;
 
             // apply solar heating
-            float solarIntensity = UpdateRadiation(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
-            Temperature += A * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-
-
+            float solarIntensity = 0;
+            if (!Grid.FrameSolarOccluded) {
+                solarIntensity = UpdateRadiation(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
+                Temperature += A * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+            }
 
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
-                Vector3 c = Tools.GetTemperatureColor(Temperature);
-                //Vector3 c = Tools.GetTemperatureColor(intensity, 10, 0.5f, 4);
+                //Vector3 c = Tools.GetTemperatureColor(Temperature);
+                Vector3 c = Tools.GetTemperatureColor(solarIntensity, 10, 0.5f, 4);
                 if (Block.ColorMaskHSV != c)
                 {
                     Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, c);

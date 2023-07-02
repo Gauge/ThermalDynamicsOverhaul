@@ -1,5 +1,7 @@
 ﻿using ProtoBuf.Meta;
 using Sandbox.Definitions;
+using Sandbox.Engine.Physics;
+using Sandbox.Engine.Voxels;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
@@ -11,12 +13,16 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using System.Transactions;
+using System.Xml;
+using VRage;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
+using VRage.Voxels;
 using VRageMath;
 
 namespace Thermodynamics
@@ -42,10 +48,10 @@ namespace Thermodynamics
         public Vector3 FrameSolarDirection;
         public MatrixD FrameMatrix;
         public Vector3D FrameGridCenter;
-        public bool FrameSolarIsBlocked;
-        public float FrameAmbiantTemprature;
+        public float FrameAmbientTemprature;
+        public float FrameAmbientStrength;
         public float FrameSolarDecay;
-        public float FrameAirDensity;
+        public bool FrameSolarOccluded;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
@@ -186,47 +192,6 @@ namespace Thermodynamics
 
             ThermalCell cell = new ThermalCell(this, b);
 
-
-            //MyCubeBlockDefinition def = b.BlockDefinition as MyCubeBlockDefinition;
-
-            //// get block properties
-            //string type = def.Id.TypeId.ToString();
-            //string subtype = def.Id.SubtypeId.ToString();
-
-            //ThermalCellDefinition group = null;
-            //ThermalCellDefinition block = null;
-
-
-            //foreach (ThermalCellDefinition bp in Settings.Instance.BlockConfig)
-            //{
-            //    if (bp.Type != type)
-            //        continue;
-
-            //    if (string.IsNullOrWhiteSpace(bp.Subtype))
-            //    {
-            //        group = bp;
-            //    }
-            //    else if (bp.Subtype == subtype)
-            //    {
-            //        block = bp;
-            //        break;
-            //    }
-            //}
-            //ThermalCell cell = new ThermalCell();
-
-            //if (block != null)
-            //{
-            //    cell.Init(block, b, this);
-            //}
-            //else if (group != null)
-            //{
-            //    cell.Init(group, b, this);
-            //}
-            //else
-            //{
-            //    cell.Init(Settings.Instance.Generic, b, this);
-            //}
-
             cell.AssignNeighbors();
 
             //MyLog.Default.Info($"[{Settings.Name}] Added {Grid.EntityId} ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
@@ -315,7 +280,7 @@ namespace Thermodynamics
             if (Grid.Physics == null)
                 NeedsUpdate = MyEntityUpdateEnum.NONE;
 
-            AfterHeatTick();
+            PrepareNextTick();
 
             Load();
         }
@@ -354,7 +319,7 @@ namespace Thermodynamics
 
             if (IterationIndex >= count && IterationFrames >= Settings.Instance.Frequency)
             {
-                AfterHeatTick();
+                PrepareNextTick();
 
                 IterationIndex = 0;
                 IterationFrames = 0;
@@ -373,8 +338,16 @@ namespace Thermodynamics
             }
         }
 
-        private void AfterHeatTick()
+
+        //public float FramePlanetDot;
+        //public float FramePlanetDotRatio;
+        //public float FramePlanetDiffernece;
+        //public float FramePlanetAmbient;
+        private void PrepareNextTick()
         {
+            //reset this
+            FrameSolarOccluded = false;
+
             FrameSolarDirection = MyVisualScriptLogicProvider.GetSunDirection();
             FrameMatrix = Grid.WorldMatrix;
             FrameGridCenter = Grid.PositionComp.WorldAABB.Center;
@@ -385,66 +358,118 @@ namespace Thermodynamics
                 RadiationNodes.list[i]?.Update();
             }
 
-            Vector3D position = Grid.PositionComp.GetPosition();
+            Vector3D position = Grid.PositionComp.WorldAABB.Center;
             PlanetManager.Planet p = PlanetManager.GetClosestPlanet(position);
 
-            if (p == null) return;
-
-            float airDensity = p.Entity.GetAirDensity(position);
-
-            Vector3 local = (position - p.Position);
-            Vector3D surfacePoint = p.Entity.GetClosestSurfacePointLocal(ref local) + p.Position;
-
-
-
-            float ambiant = p.Definition.UndergroundTemperature;
-            if (local.LengthSquared() > surfacePoint.LengthSquared()) 
+            bool isUnderground = false;
+            if (p != null)
             {
-                float dot = (float)Vector3D.Dot(local.Normalized(), FrameSolarDirection);
-                ambiant = p.Definition.NightTemperature + ((dot + 1f) * 0.5f * (p.Definition.DayTemperature-p.Definition.NightTemperature));
+                PlanetDefinition def = p.Definition();
+                Vector3 local = (position - p.Position);
+                Vector3D surfacePointLocal = p.Entity.GetClosestSurfacePointLocal(ref local);
+                isUnderground = local.LengthSquared() < surfacePointLocal.LengthSquared();
+                float airDensity = p.Entity.GetAirDensity(position);
+
+                float ambient = def.UndergroundTemperature;
+                if (!isUnderground)
+                {
+                    float dot = (float)Vector3D.Dot(local.Normalized(), FrameSolarDirection);
+                    //FramePlanetDot = dot;
+                    //FramePlanetDotRatio = (dot + 1f) * 0.5f;
+                    //FramePlanetDiffernece = (def.DayTemperature - def.NightTemperature);
+                    ambient = def.NightTemperature + ((dot + 1f) * 0.5f * (def.DayTemperature - def.NightTemperature));
+                    //FramePlanetAmbient = ambient;
+                }
+                else 
+                {
+                    FrameSolarOccluded = true;
+                }
+
+                FrameAmbientTemprature = ambient * airDensity;
+                FrameSolarDecay = def.SolarDecay * airDensity;
+                FrameAmbientStrength = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
+
+                //TODO: implement underground core temparatures
             }
 
-            FrameAmbiantTemprature = ambiant * airDensity;
-            FrameSolarDecay = p.Definition.SolarDecay * airDensity;
-            FrameAirDensity = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
+            if (FrameSolarOccluded) return;
 
-            //TODO: implement underground core temparatures
+            LineD line = new LineD(position, position + (FrameSolarDirection * 100000000));
+            //BoundingBoxD box = ray.GetBoundingBox();
+            List<MyLineSegmentOverlapResult<MyEntity>> results = new List<MyLineSegmentOverlapResult<MyEntity>>();
+            MyGamePruningStructure.GetTopmostEntitiesOverlappingRay(ref line, results);
+            LineD subLine;
 
+            for (int i = 0; i < results.Count; i++)
+            {
+                MyLineSegmentOverlapResult<MyEntity> ent = results[i];
+                MyEntity e = ent.Element;
 
+                if (e is MyPlanet)
+                {
+                    MyPlanet myPlanet = e as MyPlanet;
+                    Vector3D planetLocal = position - myPlanet.PositionComp.WorldMatrixRef.Translation;
+                    Vector3D planetDirection = Vector3D.Normalize(planetLocal);
+                    double dot = Vector3D.Dot(planetDirection, FrameSolarDirection);
+                    double occlusionDot = PlanetManager.GetLargestOcclusionDotProduct(PlanetManager.GetVisualSize(planetLocal.Length(), myPlanet.AverageRadius));
 
+                    if (dot < occlusionDot)
+                    {
+                        FrameSolarOccluded = true;
+                        break;
+                    }
+                } 
+                
+                if (e is MyVoxelBase)
+                {
+                    MyVoxelBase voxel = e as MyVoxelBase;
+                    if (voxel.RootVoxel is MyPlanet) continue;
 
+                    voxel.PositionComp.WorldAABB.Intersect(ref line, out subLine);
+                    //Vector3D start = Vector3D.Transform((Vector3D)(Vector3)ExposedSurface[i] * gridSize, matrix);
+                    var green = Color.Green.ToVector4();
+                    MySimpleObjectDraw.DrawLine(subLine.From, subLine.To, MyStringId.GetOrCompute("Square"), ref green, 0.2f);
 
-            //Vector3D min = Grid.PositionComp.WorldAABB.Min;
-            //Vector3D max = Grid.PositionComp.WorldAABB.Max;
+                    IHitInfo hit;
+                    MyAPIGateway.Physics.CastRay(subLine.From, subLine.To, out hit, 28); // 28
 
-            //var white = Color.White.ToVector4();
-            //MySimpleObjectDraw.DrawLine(FrameGridCenter, FrameGridCenter + (FrameSolarDirection * 4000), MyStringId.GetOrCompute("Square"), ref white, 0.05f);
+                    if (hit != null)
+                    {
+                        FrameSolarOccluded = true;
+                        break;
+                    }
+                }
+                
+                if (e is MyCubeGrid && e.Physics != null && e.EntityId != Grid.EntityId)
+                {
+                    MyCubeGrid g = (e as MyCubeGrid);
+                    List<MyCubeGrid> grids = new List<MyCubeGrid>();
+                    g.GetConnectedGrids(GridLinkTypeEnum.Physical, grids);
 
-            //List<IMyEntity>
-            //MyGamePruningStructure.GetTopmostEntitiesOverlappingRay()
+                    for (int j = 0; j < grids.Count; j++) 
+                    {
+                        if (grids[j].EntityId == Grid.EntityId) continue;
+                    }
 
-            //IHitInfo hit;
-            //if (MyAPIGateway.Physics.CastLongRay(FrameGridCenter, FrameGridCenter + (FrameSolarDirection * 4000), out hit, true))
-            //{
-            //    FrameSolarIsBlocked = true;
-            //}
-            //else 
-            //{
-            //    FrameSolarIsBlocked = false;
-            //}
+                    g.PositionComp.WorldAABB.Intersect(ref line, out subLine);
 
-            //FrameSolarIsBlocked = IsPathBlocked(ref min, ref max, FrameSolarDirection);
+                    var blue = Color.Blue.ToVector4();
+                    MySimpleObjectDraw.DrawLine(subLine.From, subLine.To, MyStringId.GetOrCompute("Square"), ref blue, 0.2f);
+
+                    Vector3I? hit = (e as MyCubeGrid).RayCastBlocks(subLine.From, subLine.To);
+
+                    if (hit.HasValue) 
+                    {
+                        FrameSolarOccluded = true;
+                        break;
+                    }
+                }
+            }
+
+            var color = (FrameSolarOccluded) ? Color.Red.ToVector4() : Color.White.ToVector4();
+            MySimpleObjectDraw.DrawLine(position, position + (FrameSolarDirection * 100000000), MyStringId.GetOrCompute("Square"), ref color, 0.1f);
         }
 
-        //public bool IsSolarOccluded()
-        //{
-        //    if (Grid.IsSolarOccluded) 
-        //    {
-        //        return true;
-        //    }
-
-        //    return false;
-        //}
 
         public int GetCountPerFrame()
         {

@@ -40,34 +40,45 @@ namespace Thermodynamics
 		{
 
 			if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated)
-			{
-				//MyAPIGateway.Utilities.ShowNotification($"[Grid] Frequency: {Settings.Instance.Frequency}", 1, "White");
-				MatrixD matrix = MyAPIGateway.Session.Camera.WorldMatrix;
+            {
+                //MyAPIGateway.Utilities.ShowNotification($"[Grid] Frequency: {Settings.Instance.Frequency}", 1, "White");
+                MatrixD matrix = MyAPIGateway.Session.Camera.WorldMatrix;
 				Vector3D start = matrix.Translation;
 				Vector3D end = start + (matrix.Forward * 100);
 
-				IHitInfo hit;
+                IHitInfo hit;
 				MyAPIGateway.Physics.CastRay(start, end, out hit);
 				MyCubeGrid grid = hit?.HitEntity as MyCubeGrid;
 
 				if (grid == null) return;
 
-				ThermalGrid tGrid = grid.GameLogic.GetAs<ThermalGrid>();
+				ThermalGrid g = grid.GameLogic.GetAs<ThermalGrid>();
 				Vector3I position = grid.WorldToGridInteger(hit.Position + (matrix.Forward * 0.05f));
 				IMySlimBlock block = grid.GetCubeBlock(position);
 
 				if (block == null) return;
 
-				ThermalCell cell = tGrid.Get(block.Position);
+				ThermalCell c = g.Get(block.Position);
 
-				if (cell == null)
+				if (c == null)
 					return;
 
 
-
-                MyAPIGateway.Utilities.ShowNotification($"[Environment] Temperature: {tGrid.FrameAmbiantTemprature.ToString("n3")} Solar Decay: {tGrid.FrameSolarDecay.ToString("n3")} Air Density: {tGrid.FrameAirDensity}", 1, "White");
                 //MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
-                MyAPIGateway.Utilities.ShowNotification($"[Cell] {cell.Block.Position} T: {cell.Temperature.ToString("n4")} dT: {cell.LastDeltaTemp.ToString("n6")} Gen: {cell.HeatGeneration} Neighbors: {cell.Neighbors.Count} ratio: {cell.SpecificHeatInverted}", 1, "White");
+
+
+                MyAPIGateway.Utilities.ShowNotification($"[Env] Temp: " +
+                    $"temp: {g.FrameAmbientTemprature.ToString("n3")} " +
+                    $"decay: {g.FrameSolarDecay.ToString("n3")} " +
+                    $"atmo: {g.FrameAmbientStrength.ToString("n3")} " +
+                    $"isOcc: {g.FrameSolarOccluded}", 1, "White");
+
+                MyAPIGateway.Utilities.ShowNotification($"[Cell] {c.Block.Position} " +
+                    $"T: {c.Temperature.ToString("n4")} " +
+                    $"dT: {c.LastDeltaTemp.ToString("n6")} " +
+                    $"Gen: {c.HeatGeneration} " +
+                    $"Neighbors: {c.Neighbors.Count} " +
+                    $"ratio: {c.SpecificHeatInverted}", 1, "White");
 				//MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.SolarIntensity.ToString("n3")} Average: {tGrid.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
 
                 //Grid.AverageSolarHeat[directionIndex])
