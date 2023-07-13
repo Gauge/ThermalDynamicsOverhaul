@@ -380,16 +380,20 @@ namespace Thermodynamics
                     ambient = def.NightTemperature + ((dot + 1f) * 0.5f * (def.DayTemperature - def.NightTemperature));
                     //FramePlanetAmbient = ambient;
                 }
-                else 
+                else
                 {
                     FrameSolarOccluded = true;
                 }
 
                 FrameAmbientTemprature = ambient * airDensity;
-                FrameSolarDecay = def.SolarDecay * airDensity;
+                FrameSolarDecay = 1 - def.SolarDecay * airDensity;
                 FrameAmbientStrength = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
 
                 //TODO: implement underground core temparatures
+            }
+            else 
+            {
+                FrameAmbientStrength = Settings.Instance.VaccumeRadiationStrength;
             }
 
             if (FrameSolarOccluded) return;

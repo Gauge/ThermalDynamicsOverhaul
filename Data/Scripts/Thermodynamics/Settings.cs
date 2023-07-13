@@ -62,7 +62,9 @@ namespace Thermodynamics
 			Settings s = new Settings {
 				Version = 1,
 				Frequency = 1,
-				SolarEnergy = 1000000f,
+                // 20000 watts matches the power output of solar panels
+				// according to google solar pannels are between 15 and 22% efficient
+                SolarEnergy = 100000f, 
 				EnvironmentalRaycastDistance = 5000f,
 				VaccumeRadiationStrength = 0.0005f,
 			};

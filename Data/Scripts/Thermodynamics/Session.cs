@@ -67,19 +67,19 @@ namespace Thermodynamics
                 //MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
 
 
-                MyAPIGateway.Utilities.ShowNotification($"[Env] Temp: " +
-                    $"temp: {g.FrameAmbientTemprature.ToString("n3")} " +
-                    $"decay: {g.FrameSolarDecay.ToString("n3")} " +
-                    $"atmo: {g.FrameAmbientStrength.ToString("n3")} " +
+                MyAPIGateway.Utilities.ShowNotification($"[Env] " +
+                    $"ambT: {g.FrameAmbientTemprature.ToString("n4")} " +
+                    $"decay: {g.FrameSolarDecay.ToString("n4")} " +
+                    $"atmo: {g.FrameAmbientStrength.ToString("n4")} " +
                     $"isOcc: {g.FrameSolarOccluded}", 1, "White");
 
                 MyAPIGateway.Utilities.ShowNotification($"[Cell] {c.Block.Position} " +
                     $"T: {c.Temperature.ToString("n4")} " +
                     $"dT: {c.LastDeltaTemp.ToString("n6")} " +
-                    $"Gen: {c.HeatGeneration} " +
-                    $"Neighbors: {c.Neighbors.Count} " +
-                    $"ratio: {c.SpecificHeatInverted}", 1, "White");
-				//MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.SolarIntensity.ToString("n3")} Average: {tGrid.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
+                    $"Gen: {c.HeatGeneration.ToString("n4")} " +
+                    $"Neigh: {c.Neighbors.Count} ", 1, "White");
+
+                //MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.SolarIntensity.ToString("n3")} Average: {tGrid.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
 
                 //Grid.AverageSolarHeat[directionIndex])
 

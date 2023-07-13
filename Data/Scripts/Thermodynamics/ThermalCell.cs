@@ -14,6 +14,7 @@ using VRage.ModAPI;
 using Sandbox.Game.Entities;
 using Sandbox.Game;
 using VRage.ObjectBuilders;
+using System.IO.Compression;
 
 namespace Thermodynamics
 {
@@ -28,8 +29,8 @@ namespace Thermodynamics
         public float HeatGeneration;
         public float SpecificHeatInverted;
 
-        public float PowerOutput;
-        public float PowerInput;
+        public float PowerProduced;
+        public float PowerConsumed;
         public float ConsumerGeneration;
         public float ProducerGeneration;
 
@@ -45,6 +46,7 @@ namespace Thermodynamics
 
         public ThermalGrid Grid;
         public IMySlimBlock Block;
+        public ThermalCellDefinition Definition;
 
         public List<Vector3I> Exposed = new List<Vector3I>();
         public List<Vector3I> ExposedSurface = new List<Vector3I>();
@@ -52,25 +54,26 @@ namespace Thermodynamics
         public List<Vector3I> Inside = new List<Vector3I>();
         public List<Vector3I> InsideSurface = new List<Vector3I>();
 
-
-
         public List<ThermalCell> Neighbors = new List<ThermalCell>();
-
-
 
         public ThermalCell(ThermalGrid g, IMySlimBlock b)
         {
             Grid = g;
             Block = b;
             Id = b.Position.Flatten();
-            ThermalCellDefinition p = ThermalCellDefinition.GetDefinition(Block.BlockDefinition.Id);
+            Definition = ThermalCellDefinition.GetDefinition(Block.BlockDefinition.Id);
 
             //TODO: the listeners need to handle changes at the end
             //of the update cycle instead of whenever.
             SetupListeners();
 
             // k = Watts / (meters - kelven)
-            k = p.Conductivity;
+            k = Definition.Conductivity;
+
+            if (k * Block.CubeGrid.GridSize > Definition.SpecificHeat) 
+            {
+                k = Definition.SpecificHeat/Block.CubeGrid.GridSize;
+            }
 
             // A = surface area
             A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
@@ -82,13 +85,14 @@ namespace Thermodynamics
             CubeArea = 2 * (size.X * size.Z + size.Y * size.Z + size.X * size.Y);
             CubeAreaInv = 1f/CubeArea;
 
-            if (p.SpacificHeat > 0)
+            if (Definition.SpecificHeat > 0)
             {
-                SpecificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
+                //SpecificHeatInverted = 1f / (Block.Mass * Definition.SpecificHeat);
+                SpecificHeatInverted = 1 / Definition.SpecificHeat;
             }
 
-            ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-            ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+            ProducerGeneration = Definition.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+            ConsumerGeneration = Definition.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
             UpdateHeat();
         }
 
@@ -138,12 +142,12 @@ namespace Thermodynamics
 
                 if (fat.Components.Contains(typeof(MyResourceSourceComponent)))
                 {
-                    fat.Components.Get<MyResourceSourceComponent>().OutputChanged += PowerOutputChanged;
+                    fat.Components.Get<MyResourceSourceComponent>().OutputChanged += PowerProducedChanged;
                 }
 
                 if (fat.Components.Contains(typeof(MyResourceSinkComponent)))
                 {
-                    fat.Components.Get<MyResourceSinkComponent>().CurrentInputChanged += PowerInputChanged;
+                    fat.Components.Get<MyResourceSinkComponent>().CurrentInputChanged += PowerConsumedChanged;
                 }
             }
 
@@ -263,14 +267,22 @@ namespace Thermodynamics
         private void OnThrustChanged(IMyThrust block, float old, float current)
         {
             MyThrustDefinition def = block.SlimBlock.BlockDefinition as MyThrustDefinition;
+
+            
             if (block.IsWorking)
             {
-                PowerInput = def.MinPowerConsumption + (def.MaxPowerConsumption * (block.CurrentThrust / block.MaxThrust));
-                PowerInput *= 1000000;
+                if (def.FuelConverter.FuelId == MyResourceDistributorComponent.ElectricityId)
+                {
+                    PowerConsumed = (def.MinPowerConsumption + (def.MaxPowerConsumption * (block.CurrentThrust / block.MaxThrust))) * Tools.MWtoWatt;
+                }
+                else
+                {
+                    PowerConsumed = def.ForceMagnitude * 1000 * (block.CurrentThrust / block.MaxThrust);
+                }
             }
             else
             {
-                PowerInput = 0;
+                PowerConsumed = 0;
             }
 
             UpdateHeat();
@@ -280,12 +292,12 @@ namespace Thermodynamics
         {
             if (compType == typeof(MyResourceSourceComponent))
             {
-                (component as MyResourceSourceComponent).OutputChanged += PowerOutputChanged;
+                (component as MyResourceSourceComponent).OutputChanged += PowerProducedChanged;
             }
 
             if (compType == typeof(MyResourceSinkComponent))
             {
-                (component as MyResourceSinkComponent).CurrentInputChanged += PowerInputChanged;
+                (component as MyResourceSinkComponent).CurrentInputChanged += PowerConsumedChanged;
             }
         }
 
@@ -293,42 +305,51 @@ namespace Thermodynamics
         {
             if (compType == typeof(MyResourceSourceComponent))
             {
-                (component as MyResourceSourceComponent).OutputChanged -= PowerOutputChanged;
+                (component as MyResourceSourceComponent).OutputChanged -= PowerProducedChanged;
             }
 
             if (compType == typeof(MyResourceSinkComponent))
             {
-                (component as MyResourceSinkComponent).CurrentInputChanged -= PowerInputChanged;
+                (component as MyResourceSinkComponent).CurrentInputChanged -= PowerConsumedChanged;
             }
 
 
         }
 
-        private void PowerInputChanged(MyDefinitionId resourceTypeId, float oldInput, MyResourceSinkComponent sink)
+        /// <summary>
+        /// Adjusts heat generation based on consumed power 
+        /// </summary>
+        private void PowerConsumedChanged(MyDefinitionId resourceTypeId, float oldInput, MyResourceSinkComponent sink)
         {
-            try
+            if (resourceTypeId == MyResourceDistributorComponent.ElectricityId)
             {
-                // power in watts
-                PowerInput = sink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) * 1000000;
-                UpdateHeat();
+                try
+                {
+                    // power in watts
+                    PowerConsumed = sink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) * Tools.MWtoWatt;
+                    UpdateHeat();
+                }
+                catch { }
             }
-            catch { }
         }
 
-        private void PowerOutputChanged(MyDefinitionId changedResourceId, float oldOutput, MyResourceSourceComponent source)
+        private void PowerProducedChanged(MyDefinitionId changedResourceId, float oldOutput, MyResourceSourceComponent source)
         {
-            try
+            if (changedResourceId == MyResourceDistributorComponent.ElectricityId)
             {
-                // power in watts
-                PowerOutput = source.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) * 1000000;
-                UpdateHeat();
+                try
+                {
+                    // power in watts
+                    PowerProduced = source.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) * Tools.MWtoWatt;
+                    UpdateHeat();
+                }
+                catch { }
             }
-            catch { }
         }
 
         private void UpdateHeat()
         {
-            HeatGeneration = (PowerOutput * ProducerGeneration) + (PowerInput * ConsumerGeneration);
+            HeatGeneration = (PowerProduced * ProducerGeneration) + (PowerConsumed * ConsumerGeneration);
         }
 
         public void ResetNeighbors()
@@ -472,7 +493,7 @@ namespace Thermodynamics
                     dt += ncell.LastTemperature - Temperature;
                 }
             }
-            dt = dt * (CubeArea - Exposed.Count) * CubeAreaInv;
+            //dt = dt * (CubeArea - Exposed.Count) * CubeAreaInv;
 
             // calculate ambiant temprature
             dt += (Grid.FrameAmbientTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAmbientStrength;
@@ -481,12 +502,8 @@ namespace Thermodynamics
             LastDeltaTemp = kA * dt * dxInverted * SpecificHeatInverted;
             Temperature = Math.Max(0, Temperature + LastDeltaTemp);
 
-            // calculate heat loss
-            //float strength = (cell.Temperature / Settings.Instance.VaccumeFullStrengthTemperature);
-            //float cool = Settings.Instance.VaccumDrainRate * cell.ExposedSurfaceArea * strength * cell.SpacificHeatRatio;
-
             // generate heat based on power usage
-            //Temperature += HeatGeneration;
+            Temperature += HeatGeneration;
 
             // apply solar heating
             float solarIntensity = 0;
@@ -497,8 +514,8 @@ namespace Thermodynamics
 
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
-                //Vector3 c = Tools.GetTemperatureColor(Temperature);
-                Vector3 c = Tools.GetTemperatureColor(solarIntensity, 10, 0.5f, 4);
+                Vector3 c = Tools.GetTemperatureColor(Temperature);
+                //Vector3 c = Tools.GetTemperatureColor(solarIntensity, 10, 0.5f, 4);
                 if (Block.ColorMaskHSV != c)
                 {
                     Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, c);

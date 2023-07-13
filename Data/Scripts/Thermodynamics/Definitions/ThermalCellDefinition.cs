@@ -30,7 +30,7 @@ namespace Thermodynamics
         /// This field specifies the heat capacity of the block in joules per kelvin.
         /// </summary>
         [ProtoMember(5)]
-        public float SpacificHeat;
+        public float SpecificHeat;
         
 
         /// <summary>
@@ -67,7 +67,7 @@ namespace Thermodynamics
                 def.Conductivity = (float)dvalue;
 
             if (lookup.TryGetDouble(defId, GroupId, SpecificHeatId, out dvalue))
-                def.SpacificHeat = (float)dvalue;
+                def.SpecificHeat = (float)dvalue;
 
             if (lookup.TryGetDouble(defId, GroupId, ProducerHeatPerWattId, out dvalue))
                 def.ProducerWasteHeatPerWatt = (float)dvalue;

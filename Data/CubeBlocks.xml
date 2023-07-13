@@ -9,8 +9,8 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="7000" />
-					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="Conductivity" Value="50" />
+					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="ProducerHeatPerWatt" Value="1" />
 					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
 				</Group>
@@ -25,8 +25,8 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="9000" />
-					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="Conductivity" Value="50" />
+					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="ProducerHeatPerWatt" Value="1" />
 					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
 				</Group>
@@ -41,8 +41,8 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="9000" />
-					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="Conductivity" Value="50" />
+					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="ProducerHeatPerWatt" Value="1" />
 					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
 				</Group>
@@ -57,8 +57,8 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="9000" />
-					<Decimal Name="SpecificHeat" Value="450" />
+					<Decimal Name="Conductivity" Value="50" />
+					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="ProducerHeatPerWatt" Value="1" />
 					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
 				</Group>
