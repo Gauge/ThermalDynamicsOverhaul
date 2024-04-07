@@ -19,6 +19,8 @@ namespace Thermodynamics
         private static readonly MyStringId CoreTemperatureId = MyStringId.GetOrCompute("CoreTemperature");
         private static readonly MyStringId SealevelDeadzoneId = MyStringId.GetOrCompute("SealevelDeadzone");
         private static readonly MyStringId SolarDecayId = MyStringId.GetOrCompute("SolarDecay");
+        private static readonly MyStringId AtmoConductivityId = MyStringId.GetOrCompute("AtmoConductivity");
+        private static readonly MyStringId AtmoDensityId = MyStringId.GetOrCompute("AtmoDensity");
 
         /// <summary>
         /// The ambiant temperature when the sun is on the opposite side of the planet
@@ -57,6 +59,18 @@ namespace Thermodynamics
         [ProtoMember(30)]
         public float SolarDecay;
 
+        /// <summary>
+        /// The conductiveness of the atmospheric gas
+        /// </summary>
+        [ProtoMember(40)]
+        public float AtmoConductivity;
+
+        /// <summary>
+        /// The weight of the atmospheric gas
+        /// </summary>
+        [ProtoMember(50)]
+        public float AtmoDensity;
+
         public static PlanetDefinition GetDefinition(MyDefinitionId defId) 
         {
             MyLog.Default.Info($"[{Settings.Name}] Planet Definition: {defId}");
@@ -88,6 +102,13 @@ namespace Thermodynamics
 
             if (lookup.TryGetDouble(defId, GroupId, SolarDecayId, out dvalue))
                 def.SolarDecay = (float)dvalue;
+
+            if (lookup.TryGetDouble(defId, GroupId, AtmoConductivityId, out dvalue))
+                def.AtmoConductivity = (float)dvalue;
+
+            if (lookup.TryGetDouble(defId, GroupId, AtmoDensityId, out dvalue))
+                def.AtmoDensity = (float)dvalue;
+
 
             return def;
 

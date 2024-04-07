@@ -34,11 +34,10 @@ namespace Thermodynamics
         private static readonly Guid StorageGuid = new Guid("f7cd64ae-9cd8-41f3-8e5d-3db992619343");
 
         public MyCubeGrid Grid;
-        public Dictionary<int, int> PositionToIndex;
-        public MyFreeList<ThermalCell> Thermals;
+        public Dictionary<int, int> PositionToIndex = new Dictionary<int, int>();
+        public MyFreeList<ThermalCell> Thermals = new MyFreeList<ThermalCell>();
         public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
-        public ThermalRadiationNode SolarRadiationNode;
-        private MyFreeList<ThermalRadiationNode> RadiationNodes;
+        public ThermalRadiationNode SolarRadiationNode = new ThermalRadiationNode();
 
         private int IterationFrames = 0;
         private int IterationIndex = 0;
@@ -47,7 +46,8 @@ namespace Thermodynamics
 
         public Vector3 FrameSolarDirection;
         public MatrixD FrameMatrix;
-        public Vector3D FrameGridCenter;
+
+        public float FrameAmbientConductivity;
         public float FrameAmbientTemprature;
         public float FrameAmbientStrength;
         public float FrameSolarDecay;
@@ -67,16 +67,6 @@ namespace Thermodynamics
             if (Entity.Storage == null)
                 Entity.Storage = new MyModStorageComponent();
 
-            PositionToIndex = new Dictionary<int, int>();
-            Thermals = new MyFreeList<ThermalCell>();
-
-            if (RadiationNodes == null)
-            {
-                RadiationNodes = new MyFreeList<ThermalRadiationNode>();
-            }
-
-            SolarRadiationNode = new ThermalRadiationNode();
-
             Grid.OnGridSplit += GridSplit;
             Grid.OnGridMerge += GridMerge;
 
@@ -85,7 +75,7 @@ namespace Thermodynamics
 
             //MyLog.Default.Info($"[{Settings.Name}] {Entity.DisplayName} ({Entity.EntityId}) Storage is empty: {Entity.Storage == null}");
 
-            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate =  MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
         public override bool IsSerialized()
@@ -110,7 +100,7 @@ namespace Thermodynamics
                 bytes[bi + 2] = (byte)(id >> 16);
                 bytes[bi + 3] = (byte)(id >> 24);
 
-                int t = (int)(c.Temperature * 10000);
+                int t = (int)(c.Temperature * 1500);
                 bytes[bi + 4] = (byte)t;
                 bytes[bi + 5] = (byte)(t >> 8);
                 bytes[bi + 6] = (byte)(t >> 16);
@@ -192,7 +182,7 @@ namespace Thermodynamics
 
             ThermalCell cell = new ThermalCell(this, b);
 
-            cell.AssignNeighbors();
+            cell.AddAllNeighbors();
 
             //MyLog.Default.Info($"[{Settings.Name}] Added {Grid.EntityId} ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
 
@@ -278,11 +268,12 @@ namespace Thermodynamics
         public override void UpdateOnceBeforeFrame()
         {
             if (Grid.Physics == null)
+            {
                 NeedsUpdate = MyEntityUpdateEnum.NONE;
-
-            PrepareNextTick();
+            }
 
             Load();
+            PrepareNextTick();
         }
 
         public override void UpdateBeforeSimulation()
@@ -338,25 +329,14 @@ namespace Thermodynamics
             }
         }
 
-
-        //public float FramePlanetDot;
-        //public float FramePlanetDotRatio;
-        //public float FramePlanetDiffernece;
-        //public float FramePlanetAmbient;
         private void PrepareNextTick()
         {
-            //reset this
             FrameSolarOccluded = false;
 
             FrameSolarDirection = MyVisualScriptLogicProvider.GetSunDirection();
             FrameMatrix = Grid.WorldMatrix;
-            FrameGridCenter = Grid.PositionComp.WorldAABB.Center;
 
             SolarRadiationNode.Update();
-            for (int i = 0; i < RadiationNodes.UsedLength; i++)
-            {
-                RadiationNodes.list[i]?.Update();
-            }
 
             Vector3D position = Grid.PositionComp.WorldAABB.Center;
             PlanetManager.Planet p = PlanetManager.GetClosestPlanet(position);
@@ -374,11 +354,7 @@ namespace Thermodynamics
                 if (!isUnderground)
                 {
                     float dot = (float)Vector3D.Dot(local.Normalized(), FrameSolarDirection);
-                    //FramePlanetDot = dot;
-                    //FramePlanetDotRatio = (dot + 1f) * 0.5f;
-                    //FramePlanetDiffernece = (def.DayTemperature - def.NightTemperature);
                     ambient = def.NightTemperature + ((dot + 1f) * 0.5f * (def.DayTemperature - def.NightTemperature));
-                    //FramePlanetAmbient = ambient;
                 }
                 else
                 {
@@ -389,17 +365,20 @@ namespace Thermodynamics
                 FrameSolarDecay = 1 - def.SolarDecay * airDensity;
                 FrameAmbientStrength = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
 
+                FrameAmbientConductivity = def.Conductivity;
+
+
                 //TODO: implement underground core temparatures
             }
             else 
             {
                 FrameAmbientStrength = Settings.Instance.VaccumeRadiationStrength;
+                FrameAmbientStrength = Settings.Instance.PresurizedAtmoConductivity;
             }
 
             if (FrameSolarOccluded) return;
 
-            LineD line = new LineD(position, position + (FrameSolarDirection * 100000000));
-            //BoundingBoxD box = ray.GetBoundingBox();
+            LineD line = new LineD(position, position + (FrameSolarDirection * 15000000));
             List<MyLineSegmentOverlapResult<MyEntity>> results = new List<MyLineSegmentOverlapResult<MyEntity>>();
             MyGamePruningStructure.GetTopmostEntitiesOverlappingRay(ref line, results);
             LineD subLine;
@@ -471,13 +450,13 @@ namespace Thermodynamics
             }
 
             var color = (FrameSolarOccluded) ? Color.Red.ToVector4() : Color.White.ToVector4();
-            MySimpleObjectDraw.DrawLine(position, position + (FrameSolarDirection * 100000000), MyStringId.GetOrCompute("Square"), ref color, 0.1f);
+            MySimpleObjectDraw.DrawLine(position, position + (FrameSolarDirection * 15000000), MyStringId.GetOrCompute("Square"), ref color, 0.1f);
         }
 
 
         public int GetCountPerFrame()
         {
-            return 1 + (Thermals.Count / Settings.Instance.Frequency);
+            return 1 + (int)(Settings.Instance.SimulationSpeed * Thermals.Count * Settings.Instance.Frequency);
         }
 
         /// <summary>

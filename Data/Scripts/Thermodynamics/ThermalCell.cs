@@ -15,6 +15,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game;
 using VRage.ObjectBuilders;
 using System.IO.Compression;
+using VRage.Game.Components.Interfaces;
 
 namespace Thermodynamics
 {
@@ -23,26 +24,20 @@ namespace Thermodynamics
         public int Id;
         public long Frame;
 
-        public float LastTemperature;
         public float Temperature;
-
-        public float HeatGeneration;
-        public float SpecificHeatInverted;
+        public float DeltaTemperature;
+        public float LastTemprature;
 
         public float PowerProduced;
         public float PowerConsumed;
         public float ConsumerGeneration;
         public float ProducerGeneration;
+        public float HeatGeneration;
 
-        public float k;
-        public float A;
-        public float kA;
-        public float dxInverted;
-        public float LastDeltaTemp;
+        public float C; // c =  Temp / (watt * meter)
+        public float Mass; // kg
+        public float Area; // m^2
         public float ExposedSurfaceArea;
-
-        public float CubeArea;
-        public float CubeAreaInv;
 
         public ThermalGrid Grid;
         public IMySlimBlock Block;
@@ -55,6 +50,7 @@ namespace Thermodynamics
         public List<Vector3I> InsideSurface = new List<Vector3I>();
 
         public List<ThermalCell> Neighbors = new List<ThermalCell>();
+        public List<int> TouchingSerfacesByNeighbor = new List<int>();
 
         public ThermalCell(ThermalGrid g, IMySlimBlock b)
         {
@@ -67,61 +63,14 @@ namespace Thermodynamics
             //of the update cycle instead of whenever.
             SetupListeners();
 
-            // k = Watts / (meters - kelven)
-            k = Definition.Conductivity;
+            Mass = Block.Mass;
+            Area = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
+            C = 1 / (Definition.SpecificHeat * Block.CubeGrid.GridSize);
 
-            if (k * Block.CubeGrid.GridSize > Definition.SpecificHeat) 
-            {
-                k = Definition.SpecificHeat/Block.CubeGrid.GridSize;
-            }
-
-            // A = surface area
-            A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-            kA = k * A * Settings.Instance.TimeScaleRatio; // added the time scale ratio to save on compute power
-            dxInverted = 1f / Block.CubeGrid.GridSize;
-
-            Vector3I size = (Block.Max - Block.Min) + 1;
-
-            CubeArea = 2 * (size.X * size.Z + size.Y * size.Z + size.X * size.Y);
-            CubeAreaInv = 1f/CubeArea;
-
-            if (Definition.SpecificHeat > 0)
-            {
-                //SpecificHeatInverted = 1f / (Block.Mass * Definition.SpecificHeat);
-                SpecificHeatInverted = 1 / Definition.SpecificHeat;
-            }
-
-            ProducerGeneration = Definition.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-            ConsumerGeneration = Definition.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
+            ProducerGeneration = Definition.ProducerWasteEnergy * Settings.Instance.TimeScaleRatio;
+            ConsumerGeneration = Definition.ConsumerWasteEnergy * Settings.Instance.TimeScaleRatio;
             UpdateHeat();
         }
-
-
-
-        //public void Init(ThermalCellDefinition p, IMySlimBlock b, ThermalGrid g)
-        //{
-        //    Grid = g;
-        //    Block = b;
-        //    Id = b.Position.Flatten();
-        //    SetupListeners();
-
-        //    // k = Watts / (meters - kelven)
-        //    k = p.Conductivity;
-
-        //    // A = surface area
-        //    A = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-        //    kA = k * A * Settings.Instance.TimeScaleRatio; // added the time scale ratio to save on compute power
-        //    dxInverted = 1f / Block.CubeGrid.GridSize;
-
-        //    if (p.SpacificHeat > 0)
-        //    {
-        //        SpecificHeatInverted = 1f / (Block.Mass * p.SpacificHeat);
-        //    }
-
-        //    ProducerGeneration = p.ProducerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-        //    ConsumerGeneration = p.ConsumerWasteHeatPerWatt * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-        //    UpdateHeat();
-        //}
 
         private void SetupListeners()
         {
@@ -210,16 +159,11 @@ namespace Thermodynamics
                                 //MyLog.Default.Info($"[{Settings.Name}] testing {temp} {ncell != null}");
                                 if (ncell != null)
                                 {
-                                    // connect the cells found
-                                    ncell.Neighbors.Add(c);
-                                    //ncell.CalculateSurface();
-                                    c.Neighbors.Add(ncell);
+                                    AddNeighbors(c, ncell);
                                 }
                             }
                         }
                     }
-
-                    //c.CalculateSurface();
                 };
             }
         }
@@ -243,12 +187,9 @@ namespace Thermodynamics
 
                     //MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} removed connection to, Grid: {ncell.Block.CubeGrid.EntityId} Cell: {ncell.Block.Position}");
 
-                    ncell.Neighbors.Remove(cell);
-                    //ncell.CalculateSurface();
-                    cell.Neighbors.RemoveAt(i);
+                    RemoveNeighbors(cell, ncell);
                     break;
                 }
-                //cell.CalculateSurface();
             }
             else
             {
@@ -256,11 +197,7 @@ namespace Thermodynamics
 
                 //MyLog.Default.Info($"[{Settings.Name}] Grid: {cell.Block.CubeGrid.EntityId} cell: {cell.Block.Position} adding connection to, nGrid: {ncell.Block.CubeGrid.EntityId} nCell: {ncell.Block.Position}");
 
-                cell.Neighbors.Add(ncell);
-                //cell.CalculateSurface();
-
-                ncell.Neighbors.Add(cell);
-                //ncell.CalculateSurface();
+                AddNeighbors(cell, ncell);
             }
         }
 
@@ -268,7 +205,7 @@ namespace Thermodynamics
         {
             MyThrustDefinition def = block.SlimBlock.BlockDefinition as MyThrustDefinition;
 
-            
+
             if (block.IsWorking)
             {
                 if (def.FuelConverter.FuelId == MyResourceDistributorComponent.ElectricityId)
@@ -277,7 +214,7 @@ namespace Thermodynamics
                 }
                 else
                 {
-                    PowerConsumed = def.ForceMagnitude * 1000 * (block.CurrentThrust / block.MaxThrust);
+                    PowerConsumed = def.ForceMagnitude * (block.CurrentThrust / block.MaxThrust);
                 }
             }
             else
@@ -288,7 +225,7 @@ namespace Thermodynamics
             UpdateHeat();
         }
 
-        private void OnComponentAdded(Type compType, MyEntityComponentBase component)
+        private void OnComponentAdded(Type compType, IMyEntityComponentBase component)
         {
             if (compType == typeof(MyResourceSourceComponent))
             {
@@ -301,7 +238,7 @@ namespace Thermodynamics
             }
         }
 
-        private void OnComponentRemoved(Type compType, MyEntityComponentBase component)
+        private void OnComponentRemoved(Type compType, IMyEntityComponentBase component)
         {
             if (compType == typeof(MyResourceSourceComponent))
             {
@@ -312,8 +249,6 @@ namespace Thermodynamics
             {
                 (component as MyResourceSinkComponent).CurrentInputChanged -= PowerConsumedChanged;
             }
-
-
         }
 
         /// <summary>
@@ -349,13 +284,17 @@ namespace Thermodynamics
 
         private void UpdateHeat()
         {
-            HeatGeneration = (PowerProduced * ProducerGeneration) + (PowerConsumed * ConsumerGeneration);
+            // power produced and consumed are in Watts or Joules per second.
+            // it gets multiplied by the waste energy percent and timescale ratio.
+            // we then have the heat in joules that needs to be converted into temprature.
+            // we do that by dividing it by the ThermalMass (SpecificHeat * Mass)
+            HeatGeneration = ((PowerProduced * ProducerGeneration) + (PowerConsumed * ConsumerGeneration)) / (Definition.SpecificHeat * Mass);
         }
 
         public void ResetNeighbors()
         {
             ClearNeighbors();
-            AssignNeighbors();
+            AddAllNeighbors();
         }
 
         public void ClearNeighbors()
@@ -363,13 +302,19 @@ namespace Thermodynamics
             for (int i = 0; i < Neighbors.Count; i++)
             {
                 ThermalCell ncell = Neighbors[i];
-                ncell.Neighbors.Remove(this);
+                int j = ncell.Neighbors.IndexOf(this);
+                if (j != -1)
+                {
+                    ncell.Neighbors.RemoveAt(j);
+                    ncell.TouchingSerfacesByNeighbor.RemoveAt(j);
+                }
             }
 
             Neighbors.Clear();
+            TouchingSerfacesByNeighbor.Clear();
         }
 
-        public void AssignNeighbors()
+        public void AddAllNeighbors()
         {
             //get a list of current neighbors from the grid
             List<IMySlimBlock> neighbors = new List<IMySlimBlock>();
@@ -380,8 +325,38 @@ namespace Thermodynamics
                 IMySlimBlock n = neighbors[i];
                 ThermalCell ncell = Grid.Get(n.Position);
 
-                Neighbors.Add(ncell);
-                ncell.Neighbors.Add(this);
+                if (!Neighbors.Contains(ncell))
+                {
+                    AddNeighbors(this, ncell);
+                }
+            }
+        }
+
+        protected static void AddNeighbors(ThermalCell n1, ThermalCell n2)
+        {
+            n1.Neighbors.Add(n2);
+            n2.Neighbors.Add(n1);
+
+            int area = Tools.FindTouchingSurfaceArea(n1.Block.Min, n1.Block.Max + 1, n2.Block.Min, n2.Block.Max + 1);
+
+            n1.TouchingSerfacesByNeighbor.Add(area);
+            n2.TouchingSerfacesByNeighbor.Add(area);
+        }
+
+        protected static void RemoveNeighbors(ThermalCell n1, ThermalCell n2)
+        {
+            int i = n1.Neighbors.IndexOf(n2);
+            if (i != -1)
+            {
+                n1.Neighbors.RemoveAt(i);
+                n1.TouchingSerfacesByNeighbor.RemoveAt(i);
+            }
+
+            int j = n2.Neighbors.IndexOf(n1);
+            if (i != -1)
+            {
+                n2.Neighbors.RemoveAt(j);
+                n2.TouchingSerfacesByNeighbor.RemoveAt(j);
             }
         }
 
@@ -428,7 +403,7 @@ namespace Thermodynamics
                             if (exposedSurface.Contains(p))
                             {
                                 ExposedSurface.Add(p);
-                                Vector3I dir = Vector3I.Zero; 
+                                Vector3I dir = Vector3I.Zero;
                                 if (!xIn)
                                 {
                                     dir.X = x == max.X ? 1 : -1;
@@ -460,15 +435,13 @@ namespace Thermodynamics
                 }
             }
 
-            //
-            ExposedSurfaceArea = Exposed.Count * A;
+            ExposedSurfaceArea = Exposed.Count * Area;
         }
 
         public float GetTemperature()
         {
             return Temperature;
         }
-
 
         /// <summary>
         /// Update the temperature of each cell in the grid
@@ -477,56 +450,71 @@ namespace Thermodynamics
         {
             // update to the new frame
             Frame++;
-            LastTemperature = Temperature;
+            LastTemprature = Temperature;
 
-            // calculate delta between all blocks
-            float dt = 0;
+            // calculate delta between all neighboring blocks
+            float deltaTemperature = 0;
             for (int i = 0; i < Neighbors.Count; i++)
             {
                 ThermalCell ncell = Neighbors[i];
+                // area = meter^2
+                float area = Area <= ncell.Area ? Area : ncell.Area;
+                // conductivity, k = watt / (meter * Temp)
+                // kA = watt * meter / Temp
+                float kA = Definition.Conductivity * area * TouchingSerfacesByNeighbor[i];
+
+                // deltaTemperature = watt * meter
                 if (ncell.Frame != Frame)
                 {
-                    dt += ncell.Temperature - Temperature;
+                    deltaTemperature += kA * (ncell.Temperature - Temperature);
                 }
                 else
                 {
-                    dt += ncell.LastTemperature - Temperature;
+                    deltaTemperature += kA * (ncell.LastTemprature - Temperature);
                 }
             }
-            //dt = dt * (CubeArea - Exposed.Count) * CubeAreaInv;
 
             // calculate ambiant temprature
-            dt += (Grid.FrameAmbientTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAmbientStrength;
+            //deltaTemperature += (Grid.FrameAmbientTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAmbientStrength * Grid.FrameAmbientConductivity;
 
-            // k * A * (dT / dX)
-            LastDeltaTemp = kA * dt * dxInverted * SpecificHeatInverted;
-            Temperature = Math.Max(0, Temperature + LastDeltaTemp);
+            // C = Temp / Watt * meter
+            // LastDeltaTemperature = Temp / timescale
+            DeltaTemperature = C * deltaTemperature * Settings.Instance.TimeScaleRatio;
+            Temperature = Math.Max(0, Temperature + DeltaTemperature);
 
             // generate heat based on power usage
             Temperature += HeatGeneration;
 
             // apply solar heating
-            float solarIntensity = 0;
-            if (!Grid.FrameSolarOccluded) {
-                solarIntensity = UpdateRadiation(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
-                Temperature += A * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * Settings.Instance.TimeScaleRatio * SpecificHeatInverted;
-            }
+            //float solarIntensity = 0;
+            //if (!Grid.FrameSolarOccluded)
+            //{
+            //    solarIntensity = UpdateRadiation(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
+            //    Temperature += Area * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * c * Settings.Instance.TimeScaleRatio;
+            //}
 
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
-                Vector3 c = Tools.GetTemperatureColor(Temperature);
+                Vector3 color = Tools.GetTemperatureColor(Temperature);
                 //Vector3 c = Tools.GetTemperatureColor(solarIntensity, 10, 0.5f, 4);
-                if (Block.ColorMaskHSV != c)
+                if (Block.ColorMaskHSV != color)
                 {
-                    Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, c);
+                    Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, color);
                 }
             }
         }
-        internal float UpdateRadiation(ref Vector3 targetDirection, ref ThermalRadiationNode node) 
+
+        /// <summary>
+        /// Calculates the intensity of directional heating objects (likely only solar)
+        /// </summary>
+        /// <param name="targetDirection"></param>
+        /// <param name="node"></param>
+        /// <returns></returns>
+        internal float UpdateRadiation(ref Vector3 targetDirection, ref ThermalRadiationNode node)
         {
             float intensity = 0;
             MatrixD matrix = Grid.FrameMatrix;
-            bool isArmorBlock = Block.FatBlock == null;
+            bool isCube = (Block.Max - Block.Min).Volume() <= 1;
             //float gridSize = Grid.Grid.GridSize;
 
             for (int i = 0; i < ExposedSurfaceDirection.Count; i++)
@@ -538,26 +526,28 @@ namespace Thermodynamics
                 Vector3D startDirection = Vector3D.Rotate(direction, matrix);
                 float dot = Vector3.Dot(startDirection, targetDirection);
 
-                
+
                 if (dot < 0)
                 {
                     dot = 0;
+                    //debug
                     //Vector3D start = Vector3D.Transform((Vector3D)(Vector3)ExposedSurface[i] * gridSize, matrix);
                     //var white = Color.Red.ToVector4();
                     //MySimpleObjectDraw.DrawLine(start, start + (startDirection * 0.5f), MyStringId.GetOrCompute("Square"), ref white, 0.012f * gridSize);
                 }
                 else
                 {
+                    //debug
                     //Vector3D start = Vector3D.Transform((Vector3D)(Vector3)ExposedSurface[i] * gridSize, matrix);
                     //var white = Color.White.ToVector4();
                     //MySimpleObjectDraw.DrawLine(start, start + (startDirection), MyStringId.GetOrCompute("Square"), ref white, 0.0012f * gridSize);
                 }
 
-                if (isArmorBlock)
+                if (isCube)
                 {
-                    // records the surface averages
+                    // records the surface averages for all 1x1x1 blocks
                     node.Sides[directionIndex] += intensity;
-                    node.SideSurfaces[directionIndex]++; // should try to calculate this when UpdateSurfaces
+                    node.SideSurfaces[directionIndex]++;
                     intensity += dot;
                 }
                 else

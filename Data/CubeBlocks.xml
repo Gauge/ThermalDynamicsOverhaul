@@ -9,10 +9,14 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="50" />
-					<Decimal Name="SpecificHeat" Value="50" />
-					<Decimal Name="ProducerHeatPerWatt" Value="1" />
-					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+					<!-- For Conductivity examples see https://www.engineeringtoolbox.com/thermal-conductivity-metals-d_858.html -->
+					<!-- Values generally range from 0 to 500. most material should be under 100-->
+					<Decimal Name="Conductivity" Value="45" />
+					<!--For specific heat examples see https://en.wikipedia.org/wiki/Table_of_specific_heat_capacities-->
+					<!--Make sure to convert from g to kg my multiplying 1000-->
+					<Decimal Name="SpecificHeat" Value="500" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -25,10 +29,10 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="50" />
-					<Decimal Name="SpecificHeat" Value="50" />
-					<Decimal Name="ProducerHeatPerWatt" Value="1" />
-					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+					<Decimal Name="Conductivity" Value="45" />
+					<Decimal Name="SpecificHeat" Value="500" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -41,10 +45,10 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="50" />
-					<Decimal Name="SpecificHeat" Value="50" />
-					<Decimal Name="ProducerHeatPerWatt" Value="1" />
-					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+					<Decimal Name="Conductivity" Value="45" />
+					<Decimal Name="SpecificHeat" Value="500" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -57,10 +61,10 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="50" />
-					<Decimal Name="SpecificHeat" Value="50" />
-					<Decimal Name="ProducerHeatPerWatt" Value="1" />
-					<Decimal Name="ConsumerHeatPerWatt" Value="0.25" />
+					<Decimal Name="Conductivity" Value="45" />
+					<Decimal Name="SpecificHeat" Value="500" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
 				</Group>
 			</ModExtensions>
 		</Definition>

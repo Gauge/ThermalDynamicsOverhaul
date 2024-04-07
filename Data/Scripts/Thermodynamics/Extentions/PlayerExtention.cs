@@ -3,13 +3,12 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Thermodynamics;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
-using VRageMath;
-
-using Thermodynamics;
 using VRage.Utils;
+using VRageMath;
 
 namespace ThermalOverhaulExtention
 {

@@ -14,7 +14,7 @@ using VRageMath;
 
 namespace Thermodynamics
 {
-	[MySessionComponentDescriptor(MyUpdateOrder.Simulation, 100)]
+	[MySessionComponentDescriptor(MyUpdateOrder.Simulation, 15)]
 	public class Session : MySessionComponentBase
 	{
 
@@ -44,7 +44,7 @@ namespace Thermodynamics
                 //MyAPIGateway.Utilities.ShowNotification($"[Grid] Frequency: {Settings.Instance.Frequency}", 1, "White");
                 MatrixD matrix = MyAPIGateway.Session.Camera.WorldMatrix;
 				Vector3D start = matrix.Translation;
-				Vector3D end = start + (matrix.Forward * 100);
+				Vector3D end = start + (matrix.Forward * 15);
 
                 IHitInfo hit;
 				MyAPIGateway.Physics.CastRay(start, end, out hit);
@@ -68,6 +68,9 @@ namespace Thermodynamics
 
 
                 MyAPIGateway.Utilities.ShowNotification($"[Env] " +
+                    $"sim: {Settings.Instance.SimulationSpeed.ToString("n2")} " +
+                    $"freq: {Settings.Instance.Frequency.ToString("n2")} " +
+                    $"tstep: {Settings.Instance.TimeScaleRatio.ToString("n2")} " +
                     $"ambT: {g.FrameAmbientTemprature.ToString("n4")} " +
                     $"decay: {g.FrameSolarDecay.ToString("n4")} " +
                     $"atmo: {g.FrameAmbientStrength.ToString("n4")} " +
@@ -75,11 +78,16 @@ namespace Thermodynamics
 
                 MyAPIGateway.Utilities.ShowNotification($"[Cell] {c.Block.Position} " +
                     $"T: {c.Temperature.ToString("n4")} " +
-                    $"dT: {c.LastDeltaTemp.ToString("n6")} " +
+                    $"dT: {c.DeltaTemperature.ToString("n6")} " +
                     $"Gen: {c.HeatGeneration.ToString("n4")} " +
                     $"Neigh: {c.Neighbors.Count} ", 1, "White");
 
-                //MyAPIGateway.Utilities.ShowNotification($"[Solar] {cell.SolarIntensity.ToString("n3")} Average: {tGrid.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification($"[Calc] m: {c.Mass.ToString("n0")} " +
+                    $"sh: {c.ThermalMass.ToString("n0")} " +
+                    $"T: {c.Temperature.ToString("n6")} " +
+                    $"c: {c.C.ToString("n4")} ", 1, "White");
+
+                //MyAPIGateway.Utilities.ShowNotification($"[Solar] {c.SolarIntensity.ToString("n3")} Average: {g.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
 
                 //Grid.AverageSolarHeat[directionIndex])
 

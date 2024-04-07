@@ -17,8 +17,6 @@ namespace Thermodynamics
 		public const string Name = "Thermodynamics";
 		public const bool Debug = true;
 
-		public const float SecondsPerFrame = 1f / 60f;
-
 		public static Settings Instance;
 
         public static readonly MyStringHash DefaultSubtypeId = MyStringHash.GetOrCompute("DefaultThermodynamics");
@@ -27,28 +25,32 @@ namespace Thermodynamics
 		public int Version;
 
 		/// <summary>
-		/// The frequency with which the system updates 
+		/// the number of update cycles per second
 		/// </summary>
-		[ProtoMember(10)]
+		[ProtoMember(15)]
 		public int Frequency;
 
-		[ProtoMember(20)]
+		/// <summary>
+		/// the desired sim speed
+		/// this will increase the frequency without changing the TimeScale
+		/// </summary>
+		[ProtoMember(16)]
+		public float SimulationSpeed;
+
+		[ProtoMember(110)]
 		public float SolarEnergy;
 
-		[ProtoMember(30)]
+		[ProtoMember(120)]
 		public float EnvironmentalRaycastDistance;
 
-        /// <summary>
-        /// The drain rate in watts per cubic meter of exposed surface
-        /// </summary>
-        [ProtoMember(50)]
-		public float VaccumDrainRate;
-
-		[ProtoMember(60)]
-		public float VaccumeFullStrengthTemperature;
-
-		[ProtoMember(70)]
+		[ProtoMember(130)]
 		public float VaccumeRadiationStrength;
+
+		[ProtoMember(140)]
+		public float PresurizedAtmoConductivity;
+
+		[ProtoMember(150)]
+		public float PresurizedAtmoSpecificHeat;
 
 
         /// <summary>
@@ -61,13 +63,16 @@ namespace Thermodynamics
 		{
 			Settings s = new Settings {
 				Version = 1,
-				Frequency = 1,
+				Frequency = 60,
+				SimulationSpeed = 1,
                 // 20000 watts matches the power output of solar panels
 				// according to google solar pannels are between 15 and 22% efficient
-                SolarEnergy = 100000f, 
+                SolarEnergy = 60000f, 
 				EnvironmentalRaycastDistance = 5000f,
-				VaccumeRadiationStrength = 0.0005f,
-			};
+				VaccumeRadiationStrength = 0.05f,
+				PresurizedAtmoConductivity = 0.026f,
+				PresurizedAtmoSpecificHeat = 1005,
+            };
 
 			s.Init();
 			return s;
@@ -79,7 +84,7 @@ namespace Thermodynamics
 			if (Frequency < 1)
 				Frequency = 1;
 
-			TimeScaleRatio = Frequency / 60f;
+			TimeScaleRatio =  1/Frequency;
 		}
 
 		public static Settings Load()

@@ -8,7 +8,7 @@ namespace Thermodynamics
     public class Tools
     {
 
-        public const float MWtoWatt = 1000000;
+        public const float MWtoWatt = 150000;
 
         /// <summary>
         /// Converts a single axis direction vector into a number
@@ -78,6 +78,38 @@ namespace Thermodynamics
             }
 
             return new Vector3(h, s, v);
+        }
+
+        /// <summary>
+        /// Calculates the surface area of the touching sides
+        /// If you are using IMySlimBlock. add +1 to the max value
+        /// </summary>
+        public static int FindTouchingSurfaceArea(Vector3I minA, Vector3I maxA, Vector3I minB, Vector3I maxB) 
+        {
+            bool touched = false;
+            int val = 1;
+            if (!(minA.X == maxB.X || maxA.X == minB.X))
+            {
+                val *= Math.Min(maxA.X, maxB.X) - Math.Max(minA.X, minB.X);
+                touched = true;
+            }
+
+            if (!(minA.Y == maxB.Y || maxA.Y == minB.Y))
+            {
+                val *= Math.Min(maxA.Y, maxB.Y) - Math.Max(minA.Y, minB.Y);
+                touched = true;
+            }
+
+            if (!(minA.Y == maxB.Y || maxA.Y == minB.Y))
+            {
+                val *= Math.Min(maxA.Y, maxB.Y) - Math.Max(minA.Y, minB.Y);
+                touched = true;
+            }
+
+            if (!touched)
+                return 0;
+
+            return val;
         }
     }
 }

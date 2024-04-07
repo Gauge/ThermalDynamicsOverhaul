@@ -21,29 +21,30 @@ namespace Thermodynamics
 
 
         /// <summary>
-        /// This field specifies the conductivity of the block.
+        /// Conductivity equation: watt / ( meter * Temp)
+        /// For examples see https://www.engineeringtoolbox.com/thermal-conductivity-metals-d_858.html
         /// </summary>
-        [ProtoMember(4)]
+        [ProtoMember(1)]
         public float Conductivity;
 
         /// <summary>
-        /// This field specifies the heat capacity of the block in joules per kelvin.
+        /// SpecificHeat equation: watt / (mass_kg * temp_kelven)
+        /// For examples see https://en.wikipedia.org/wiki/Table_of_specific_heat_capacities
         /// </summary>
-        [ProtoMember(5)]
+        [ProtoMember(10)]
         public float SpecificHeat;
         
-
         /// <summary>
-        /// 
+        /// the percent of produced energy converted to heat
         /// </summary>
         [ProtoMember(20)]
-        public float ProducerWasteHeatPerWatt;
+        public float ProducerWasteEnergy;
 
         /// <summary>
-        /// 
+        /// the percent of consumed energy converted to heat
         /// </summary>
         [ProtoMember(30)]
-        public float ConsumerWasteHeatPerWatt;
+        public float ConsumerWasteEnergy;
 
 
         public static ThermalCellDefinition GetDefinition(MyDefinitionId defId)
@@ -70,10 +71,19 @@ namespace Thermodynamics
                 def.SpecificHeat = (float)dvalue;
 
             if (lookup.TryGetDouble(defId, GroupId, ProducerHeatPerWattId, out dvalue))
-                def.ProducerWasteHeatPerWatt = (float)dvalue;
+                def.ProducerWasteEnergy = (float)dvalue;
 
             if (lookup.TryGetDouble(defId, GroupId, ConsumerHeatPerWattId, out dvalue))
-                def.ConsumerWasteHeatPerWatt = (float)dvalue;
+                def.ConsumerWasteEnergy = (float)dvalue;
+
+
+            def.Conductivity = Math.Max(0, def.Conductivity);
+
+            def.SpecificHeat = Math.Max(0, def.SpecificHeat);
+
+            def.ProducerWasteEnergy = Math.Max(0, def.ProducerWasteEnergy);
+
+            def.ConsumerWasteEnergy = Math.Max(0, def.ConsumerWasteEnergy);
 
             return def;
         }
