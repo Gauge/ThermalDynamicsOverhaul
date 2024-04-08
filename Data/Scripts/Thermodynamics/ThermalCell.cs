@@ -16,6 +16,7 @@ using Sandbox.Game;
 using VRage.ObjectBuilders;
 using System.IO.Compression;
 using VRage.Game.Components.Interfaces;
+using System.Drawing;
 
 namespace Thermodynamics
 {
@@ -30,14 +31,18 @@ namespace Thermodynamics
 
         public float PowerProduced;
         public float PowerConsumed;
-        public float ConsumerGeneration;
-        public float ProducerGeneration;
         public float HeatGeneration;
 
         public float C; // c =  Temp / (watt * meter)
         public float Mass; // kg
         public float Area; // m^2
-        public float ExposedSurfaceArea;
+        public float ExposedSurfaceArea; // m^2 of all exposed faces on this block
+        public float Radiation;
+        public float ThermalMassInv; // 1 / SpecificHeat * Mass
+
+
+        //public float CubeArea;
+        //public float CubeAreaInv;
 
         public ThermalGrid Grid;
         public IMySlimBlock Block;
@@ -66,12 +71,24 @@ namespace Thermodynamics
             Mass = Block.Mass;
             Area = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
             C = 1 / (Definition.SpecificHeat * Block.CubeGrid.GridSize);
+            ThermalMassInv = 1f / (Definition.SpecificHeat * Mass);
 
-            ProducerGeneration = Definition.ProducerWasteEnergy * Settings.Instance.TimeScaleRatio;
-            ConsumerGeneration = Definition.ConsumerWasteEnergy * Settings.Instance.TimeScaleRatio;
+            Vector3I size = (Block.Max - Block.Min) + 1;
+            float largestSurface = Math.Max(size.X * size.Y, Math.Max(size.X * size.Z, size.Y * size.Z));
+            float kA = Definition.Conductivity * (Area * largestSurface);
+
+            if (kA*C >= 1f) 
+            {
+                MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id} has a transfer rate of ({kA * C}). Increase the SpecificHeat, Decrease the Conductivity, or increase the update frequency");
+            }
+
+
+            //
+            //CubeArea = 2 * (size.X * size.Z + size.Y * size.Z + size.X * size.Y);
+            //CubeAreaInv = 1f / CubeArea;
+
             UpdateHeat();
         }
-
         private void SetupListeners()
         {
             if (Block.FatBlock == null) return;
@@ -288,7 +305,7 @@ namespace Thermodynamics
             // it gets multiplied by the waste energy percent and timescale ratio.
             // we then have the heat in joules that needs to be converted into temprature.
             // we do that by dividing it by the ThermalMass (SpecificHeat * Mass)
-            HeatGeneration = ((PowerProduced * ProducerGeneration) + (PowerConsumed * ConsumerGeneration)) / (Definition.SpecificHeat * Mass);
+            HeatGeneration = Settings.Instance.TimeScaleRatio * ((PowerProduced * Definition.ProducerWasteEnergy) + (PowerConsumed * Definition.ConsumerWasteEnergy)) * ThermalMassInv;
         }
 
         public void ResetNeighbors()
@@ -459,6 +476,7 @@ namespace Thermodynamics
                 ThermalCell ncell = Neighbors[i];
                 // area = meter^2
                 float area = Area <= ncell.Area ? Area : ncell.Area;
+
                 // conductivity, k = watt / (meter * Temp)
                 // kA = watt * meter / Temp
                 float kA = Definition.Conductivity * area * TouchingSerfacesByNeighbor[i];
@@ -474,12 +492,24 @@ namespace Thermodynamics
                 }
             }
 
+            // use Stefan-Boltzmann Law to calculate the energy lossed/gained from the environment
+            // we make it nagiative to indicate removal of energy
+            //Radiation = -1 * Definition.Emissivity * Tools.BoltzmannConstant * ExposedSurfaceArea * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTemprature * Grid.FrameAmbientTemprature * Grid.FrameAmbientTemprature * Grid.FrameAmbientTemprature);
+
+            if (!Grid.FrameSolarOccluded)
+            {
+                //float intensity = DirectionalRadiationIntensity(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
+                //Radiation += Settings.Instance.SolarEnergy * Definition.Emissivity * (intensity * ExposedSurfaceArea);
+            }
+
             // calculate ambiant temprature
             //deltaTemperature += (Grid.FrameAmbientTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAmbientStrength * Grid.FrameAmbientConductivity;
 
-            // C = Temp / Watt * meter
-            // LastDeltaTemperature = Temp / timescale
-            DeltaTemperature = C * deltaTemperature * Settings.Instance.TimeScaleRatio;
+
+
+            // C = Temp / Watt * meter and deltaTemperature = Watt * Meter.
+            // these cancel leaving only temperature behind
+            DeltaTemperature = ((C * deltaTemperature) + (Radiation * ThermalMassInv)) * Settings.Instance.TimeScaleRatio;
             Temperature = Math.Max(0, Temperature + DeltaTemperature);
 
             // generate heat based on power usage
@@ -510,12 +540,11 @@ namespace Thermodynamics
         /// <param name="targetDirection"></param>
         /// <param name="node"></param>
         /// <returns></returns>
-        internal float UpdateRadiation(ref Vector3 targetDirection, ref ThermalRadiationNode node)
+        internal float DirectionalRadiationIntensity(ref Vector3 targetDirection, ref ThermalRadiationNode node)
         {
             float intensity = 0;
             MatrixD matrix = Grid.FrameMatrix;
             bool isCube = (Block.Max - Block.Min).Volume() <= 1;
-            //float gridSize = Grid.Grid.GridSize;
 
             for (int i = 0; i < ExposedSurfaceDirection.Count; i++)
             {

@@ -8,7 +8,10 @@ namespace Thermodynamics
     public class Tools
     {
 
-        public const float MWtoWatt = 150000;
+        public const float MWtoWatt = 1000000;
+        public const float BoltzmannConstant = 0.00000005670374419f;
+        public const float VacuumTemperaturePower4 = 53.1441f; // vacuum temp is 2.7 kelven. 2.7^4 is 53.1441;
+        public const float ConductivityScaler = 1f / 10000f;
 
         /// <summary>
         /// Converts a single axis direction vector into a number

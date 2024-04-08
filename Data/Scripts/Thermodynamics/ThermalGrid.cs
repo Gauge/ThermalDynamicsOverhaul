@@ -39,9 +39,9 @@ namespace Thermodynamics
         public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
         public ThermalRadiationNode SolarRadiationNode = new ThermalRadiationNode();
 
-        private int IterationFrames = 0;
         private int IterationIndex = 0;
         private int CountPerFrame = 0;
+        private int UpdateDirection = 0;
         public bool ThermalCellUpdateComplete = true;
 
         public Vector3 FrameSolarDirection;
@@ -73,8 +73,6 @@ namespace Thermodynamics
             Grid.OnBlockAdded += BlockAdded;
             Grid.OnBlockRemoved += BlockRemoved;
 
-            //MyLog.Default.Info($"[{Settings.Name}] {Entity.DisplayName} ({Entity.EntityId}) Storage is empty: {Entity.Storage == null}");
-
             NeedsUpdate =  MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
@@ -100,7 +98,7 @@ namespace Thermodynamics
                 bytes[bi + 2] = (byte)(id >> 16);
                 bytes[bi + 3] = (byte)(id >> 24);
 
-                int t = (int)(c.Temperature * 1500);
+                int t = (int)(c.Temperature * 1000);
                 bytes[bi + 4] = (byte)t;
                 bytes[bi + 5] = (byte)(t >> 8);
                 bytes[bi + 6] = (byte)(t >> 16);
@@ -128,7 +126,9 @@ namespace Thermodynamics
                 f |= bytes[i + 6] << 16;
                 f |= bytes[i + 7] << 24;
 
-                Thermals.list[PositionToIndex[id]].Temperature = f * 0.0001f;
+                //MyLog.Default.Info($"[{Settings.Name}] [Unpack] {id} - T: {f*0.001f}");
+
+                Thermals.list[PositionToIndex[id]].Temperature = f * 0.001f;
             }
         }
 
@@ -273,70 +273,94 @@ namespace Thermodynamics
             }
 
             Load();
-            PrepareNextTick();
+            PrepareNextFrame();
         }
+
+
+        
 
         public override void UpdateBeforeSimulation()
         {
-            IterationFrames++;
-
-            int count = Thermals.UsedLength;
-            int target = count - IterationIndex;
-            if (CountPerFrame < target)
+            try
             {
-                target = CountPerFrame;
-            }
+                bool isNewFrame = true;
+                int quota = CountPerFrame;
+                int count = Thermals.UsedLength;
 
-            target += IterationIndex;
-
-            //MyAPIGateway.Utilities.ShowNotification($"[Loop] Nodes: {count}, Frames/Cycle {Settings.Instance.Frequency} Nodes/Cycle: {CountPerFrame} Target: {target}, Index: {IterationIndex}", 1, "White");
-            while (IterationIndex < target)
-            {
-                ThermalCell cell = Thermals.list[IterationIndex];
-                if (cell != null)
+                MyAPIGateway.Utilities.ShowNotification($"[Loop] c: {count} fpc: {60f / Settings.Instance.Frequency} cpf: {CountPerFrame} cpc: {60f / Settings.Instance.Frequency * CountPerFrame} Index: {IterationIndex}", 1, "White");
+                while (quota > 0)
                 {
-                    if (!ThermalCellUpdateComplete)
+                    // finds the remaining cells in the simulation
+                    int workCount = count - IterationIndex;
+                    // if the remaining work this frame is less than the full simulation
+                    // end the work early, otherwise complete all the cells
+                    if (quota < workCount)
                     {
-                        cell.UpdateSurfaces(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
+                        workCount = quota;
                     }
 
-                    cell.Update();
-                }
+                    // WorkDone + WorkRemaining = target work.
+                    // Since we are picking up in the middle of the simulation and index wont always be 0
+                    int target = IterationIndex + workCount;
 
-                IterationIndex++;
+                    while (IterationIndex < target)
+                    {
+                        ThermalCell cell = Thermals.list[(UpdateDirection == 0) ? IterationIndex : UpdateDirection - IterationIndex];
+                        if (cell != null)
+                        {
+                            if (!ThermalCellUpdateComplete)
+                            {
+                                cell.UpdateSurfaces(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
+                            }
+
+                            cell.Update();
+                        }
+
+                        IterationIndex++;
+                    }
+
+                    // remove the work done so far
+                    quota -= workCount;
+
+                    if (IterationIndex >= count)
+                    {
+                        MapExternalBlocks();
+                        PrepareNextFrame();
+
+                        IterationIndex = 0;
+                        UpdateDirection = UpdateDirection == 0 ? count : 0;
+
+                        if (!ThermalCellUpdateComplete)
+                            ThermalCellUpdateComplete = true;
+
+                        if (!NodeUpdateComplete &&
+                            ExposedQueue.Count == 0 &&
+                            SolidQueue.Count == 0 &&
+                            InsideQueue.Count == 0)
+                        {
+                            NodeUpdateComplete = true;
+                            ThermalCellUpdateComplete = false;
+                        }
+                    }
+                }
             }
-
-            MapExternalBlocks();
-
-            if (IterationIndex >= count && IterationFrames >= Settings.Instance.Frequency)
+            catch(Exception e) 
             {
-                PrepareNextTick();
-
-                IterationIndex = 0;
-                IterationFrames = 0;
-
-                if (!ThermalCellUpdateComplete)
-                    ThermalCellUpdateComplete = true;
-
-                if (!NodeUpdateComplete &&
-                    ExposedQueue.Count == 0 &&
-                    SolidQueue.Count == 0 &&
-                    InsideQueue.Count == 0)
-                {
-                    NodeUpdateComplete = true;
-                    ThermalCellUpdateComplete = false;
-                }
             }
         }
 
-        private void PrepareNextTick()
-        {
-            FrameSolarOccluded = false;
+        private void PrepareNextSim() {
+            
 
+        }
+
+        private void PrepareNextFrame()
+        {
+            SolarRadiationNode.Update();
+
+            FrameSolarOccluded = false;
             FrameSolarDirection = MyVisualScriptLogicProvider.GetSunDirection();
             FrameMatrix = Grid.WorldMatrix;
-
-            SolarRadiationNode.Update();
 
             Vector3D position = Grid.PositionComp.WorldAABB.Center;
             PlanetManager.Planet p = PlanetManager.GetClosestPlanet(position);
@@ -361,11 +385,11 @@ namespace Thermodynamics
                     FrameSolarOccluded = true;
                 }
 
-                FrameAmbientTemprature = ambient * airDensity;
+                FrameAmbientTemprature = Math.Max(2.7f, ambient * airDensity);
                 FrameSolarDecay = 1 - def.SolarDecay * airDensity;
                 FrameAmbientStrength = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
 
-                FrameAmbientConductivity = def.Conductivity;
+                FrameAmbientConductivity = def.AtmoConductivity;
 
 
                 //TODO: implement underground core temparatures
@@ -454,9 +478,14 @@ namespace Thermodynamics
         }
 
 
+        /// <summary>
+        /// divide the total number of cells by the update frequency (updates per second) gets you the number of cells per simulation cycle per frame
+        /// then you multiply that by the number of simulations per second.
+        /// </summary>
+        /// <returns></returns>
         public int GetCountPerFrame()
         {
-            return 1 + (int)(Settings.Instance.SimulationSpeed * Thermals.Count * Settings.Instance.Frequency);
+            return Math.Max(1, (int)(Thermals.UsedLength * (Settings.Instance.Frequency / 60f) * Settings.Instance.SimulationSpeed));
         }
 
         /// <summary>

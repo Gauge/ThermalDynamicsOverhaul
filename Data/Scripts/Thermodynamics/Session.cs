@@ -82,10 +82,16 @@ namespace Thermodynamics
                     $"Gen: {c.HeatGeneration.ToString("n4")} " +
                     $"Neigh: {c.Neighbors.Count} ", 1, "White");
 
-                MyAPIGateway.Utilities.ShowNotification($"[Calc] m: {c.Mass.ToString("n0")} " +
-                    $"sh: {c.ThermalMass.ToString("n0")} " +
-                    $"T: {c.Temperature.ToString("n6")} " +
-                    $"c: {c.C.ToString("n4")} ", 1, "White");
+                MyAPIGateway.Utilities.ShowNotification(
+                    $"[Calc] m: {c.Mass.ToString("n0")} " +
+                    $"k: {(c.Definition.Conductivity).ToString("n2")} " +
+                    $"kA: {(c.Definition.Conductivity * c.Area).ToString("n0")} " +
+                    $"th: {(c.Definition.SpecificHeat * c.Mass).ToString("n0")} " +
+                    $"c: {c.C.ToString("n4")} " +
+                    $"r: {c.Radiation.ToString("n2")} " +
+                    $"rdt: {(c.Radiation * c.ThermalMassInv).ToString("n4")} " +
+                    $"proW: {(c.PowerProduced * c.Definition.ProducerWasteEnergy).ToString("n0")} " +
+                    $"conW: {(c.PowerConsumed * c.Definition.ConsumerWasteEnergy).ToString("n0")} ", 1, "White");
 
                 //MyAPIGateway.Utilities.ShowNotification($"[Solar] {c.SolarIntensity.ToString("n3")} Average: {g.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
 

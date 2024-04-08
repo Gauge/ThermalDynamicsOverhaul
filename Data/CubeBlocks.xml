@@ -11,16 +11,37 @@
 				<Group Name="ThermalBlockProperties">
 					<!-- For Conductivity examples see https://www.engineeringtoolbox.com/thermal-conductivity-metals-d_858.html -->
 					<!-- Values generally range from 0 to 500. most material should be under 100-->
-					<Decimal Name="Conductivity" Value="45" />
+					<!-- This assume the temperature is absolute 0 and will deminish as temperature rises-->
+					<Decimal Name="Conductivity" Value="15" />
 					<!--For specific heat examples see https://en.wikipedia.org/wiki/Table_of_specific_heat_capacities-->
 					<!--Make sure to convert from g to kg my multiplying 1000-->
 					<Decimal Name="SpecificHeat" Value="500" />
-					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
+					<!-- For examples of Emissivity see https://www.engineeringtoolbox.com/emissivity-coefficients-d_447.html-->
+					<!--This is a number between 0 and 1 that represents how much energy will radiate away -->
+					<Decimal Name="Emissivity" Value="0.25" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
 				</Group>
 			</ModExtensions>
 		</Definition>
 
+		<Definition>
+			<Id>
+				<TypeId>InteriorLight</TypeId>
+				<SubtypeId>DefaultThermodynamics</SubtypeId>
+			</Id>
+
+			<ModExtensions>
+				<Group Name="ThermalBlockProperties">
+					<Decimal Name="Conductivity" Value="7" />
+					<Decimal Name="SpecificHeat" Value="50" />
+					<Decimal Name="Emissivity" Value="0.25" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+				</Group>
+			</ModExtensions>
+		</Definition>
+		
 		<Definition>
 			<Id>
 				<TypeId>Reactor</TypeId>
@@ -29,10 +50,11 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="45" />
+					<Decimal Name="Conductivity" Value="15" />
 					<Decimal Name="SpecificHeat" Value="500" />
-					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
+					<Decimal Name="Emissivity" Value="0.25" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -45,10 +67,11 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="45" />
+					<Decimal Name="Conductivity" Value="15" />
 					<Decimal Name="SpecificHeat" Value="500" />
-					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
+					<Decimal Name="Emissivity" Value="0.25" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -61,10 +84,11 @@
 
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="45" />
+					<Decimal Name="Conductivity" Value="15" />
 					<Decimal Name="SpecificHeat" Value="500" />
-					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.005" />
+					<Decimal Name="Emissivity" Value="0.25" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
 				</Group>
 			</ModExtensions>
 		</Definition>

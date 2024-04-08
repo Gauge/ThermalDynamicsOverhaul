@@ -92,14 +92,14 @@ namespace Thermodynamics
 
             //string text = "";
             //for (int i = 0; i < Rooms.Count; i++)
-           // {
+            // {
             //    text += $" R{i} {Rooms[i].Count}";
             //}
 
             //MyLog.Default.Info($"[Mapper] {Grid.EntityId} ({loopCount},{ExposedQueue.Count},{InsideQueue.Count},{SolidQueue.Count})  Exposed {ExposedNodes.Count} ExposedSurface {ExposedSurface.Count} Solid {SolidNodes.Count} Inside {InsideNodes.Count} Rooms: {Rooms.Count}" + text);
         }
 
-        private void CrawlInside(ref int loopCount) 
+        private void CrawlInside(ref int loopCount)
         {
             while (InsideQueue.Count > 0 && loopCount < NodeCountPerFrame)
             {
@@ -121,7 +121,7 @@ namespace Thermodynamics
             }
         }
 
-        private void CrawlBlocks(ref int loopCount) 
+        private void CrawlBlocks(ref int loopCount)
         {
             while (SolidQueue.Count > 0 && loopCount < NodeCountPerFrame)
             {
@@ -132,7 +132,7 @@ namespace Thermodynamics
                 {
                     Vector3I n = block + neighbors[i];
 
-                    if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || SolidNodes.Contains(n) || ExposedNodes.Contains(n) || InsideNodes.Contains(n) )
+                    if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || SolidNodes.Contains(n) || ExposedNodes.Contains(n) || InsideNodes.Contains(n))
                         continue;
 
                     if (!AreNodesAirtight(block, n))
@@ -141,9 +141,9 @@ namespace Thermodynamics
                         // this block can be redone later
                         SolidQueue.Enqueue(block);
                         InsideQueue.Enqueue(n);
-                        
+
                         Rooms.Add(new HashSet<Vector3I>());
-                        
+
                         InsideNodes.Add(n);
                         Rooms[Rooms.Count - 1].Add(n);
 
@@ -156,7 +156,7 @@ namespace Thermodynamics
             }
         }
 
-        private void CrawlOutside(ref int loopCount) 
+        private void CrawlOutside(ref int loopCount)
         {
             while (ExposedQueue.Count > 0 && loopCount < NodeCountPerFrame)
             {
@@ -206,11 +206,12 @@ namespace Thermodynamics
         {
             // the the point being moved to is empty it is not air tight
             IMySlimBlock target = Grid.GetCubeBlock(end);
-            if (target == null) {
+            if (target == null)
+            {
                 surfaces.Add(end);
                 return false;
             }
-                
+
             IMySlimBlock current = Grid.GetCubeBlock(start);
 
             // verify that the block is fully built and airtight

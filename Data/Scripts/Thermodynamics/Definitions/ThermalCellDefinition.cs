@@ -15,8 +15,9 @@ namespace Thermodynamics
         private static readonly MyStringId GroupId = MyStringId.GetOrCompute("ThermalBlockProperties");
         private static readonly MyStringId ConductivityId = MyStringId.GetOrCompute("Conductivity");
         private static readonly MyStringId SpecificHeatId = MyStringId.GetOrCompute("SpecificHeat");
-        private static readonly MyStringId ProducerHeatPerWattId = MyStringId.GetOrCompute("ProducerHeatPerWatt");
-        private static readonly MyStringId ConsumerHeatPerWattId = MyStringId.GetOrCompute("ConsumerHeatPerWatt");
+        private static readonly MyStringId EmissivityId = MyStringId.GetOrCompute("Emissivity");
+        private static readonly MyStringId ProducerWasteEnergyId = MyStringId.GetOrCompute("ProducerWasteEnergy");
+        private static readonly MyStringId ConsumerWasteEnergyId = MyStringId.GetOrCompute("ConsumerWasteEnergy");
         private static readonly MyDefinitionId DefaultCubeBlockDefinitionId = new MyDefinitionId(typeof(MyObjectBuilder_EnvironmentDefinition), Settings.DefaultSubtypeId);
 
 
@@ -33,7 +34,14 @@ namespace Thermodynamics
         /// </summary>
         [ProtoMember(10)]
         public float SpecificHeat;
-        
+
+        /// <summary>
+        /// This is a value between 0 and 1 that represents how much energy will radiate away
+        /// see for examples https://www.engineeringtoolbox.com/emissivity-coefficients-d_447.html
+        /// </summary>
+        [ProtoMember(15)]
+        public float Emissivity;
+
         /// <summary>
         /// the percent of produced energy converted to heat
         /// </summary>
@@ -70,16 +78,21 @@ namespace Thermodynamics
             if (lookup.TryGetDouble(defId, GroupId, SpecificHeatId, out dvalue))
                 def.SpecificHeat = (float)dvalue;
 
-            if (lookup.TryGetDouble(defId, GroupId, ProducerHeatPerWattId, out dvalue))
+            if (lookup.TryGetDouble(defId, GroupId, EmissivityId, out dvalue))
+                def.Emissivity = (float)dvalue;
+
+            if (lookup.TryGetDouble(defId, GroupId, ProducerWasteEnergyId, out dvalue))
                 def.ProducerWasteEnergy = (float)dvalue;
 
-            if (lookup.TryGetDouble(defId, GroupId, ConsumerHeatPerWattId, out dvalue))
+            if (lookup.TryGetDouble(defId, GroupId, ConsumerWasteEnergyId, out dvalue))
                 def.ConsumerWasteEnergy = (float)dvalue;
 
 
             def.Conductivity = Math.Max(0, def.Conductivity);
 
             def.SpecificHeat = Math.Max(0, def.SpecificHeat);
+
+            def.Emissivity = Math.Max(0, def.Emissivity);
 
             def.ProducerWasteEnergy = Math.Max(0, def.ProducerWasteEnergy);
 

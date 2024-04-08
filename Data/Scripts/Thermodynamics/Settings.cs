@@ -37,6 +37,9 @@ namespace Thermodynamics
 		[ProtoMember(16)]
 		public float SimulationSpeed;
 
+		/// <summary>
+		/// SolarEnergy = watts/m^2
+		/// </summary>
 		[ProtoMember(110)]
 		public float SolarEnergy;
 
@@ -63,11 +66,9 @@ namespace Thermodynamics
 		{
 			Settings s = new Settings {
 				Version = 1,
-				Frequency = 60,
-				SimulationSpeed = 1,
-                // 20000 watts matches the power output of solar panels
-				// according to google solar pannels are between 15 and 22% efficient
-                SolarEnergy = 60000f, 
+				Frequency = 1,
+				SimulationSpeed = 30,
+                SolarEnergy = 1400f, 
 				EnvironmentalRaycastDistance = 5000f,
 				VaccumeRadiationStrength = 0.05f,
 				PresurizedAtmoConductivity = 0.026f,
@@ -84,7 +85,7 @@ namespace Thermodynamics
 			if (Frequency < 1)
 				Frequency = 1;
 
-			TimeScaleRatio =  1/Frequency;
+			TimeScaleRatio =  1f/Frequency;
 		}
 
 		public static Settings Load()
