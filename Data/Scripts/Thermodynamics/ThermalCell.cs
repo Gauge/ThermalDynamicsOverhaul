@@ -23,7 +23,7 @@ namespace Thermodynamics
     public class ThermalCell
     {
         public int Id;
-        public long Frame;
+        public int Frame;
 
         public float Temperature;
         public float DeltaTemperature;
@@ -64,6 +64,8 @@ namespace Thermodynamics
             Id = b.Position.Flatten();
             Definition = ThermalCellDefinition.GetDefinition(Block.BlockDefinition.Id);
 
+            //MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id}");
+
             //TODO: the listeners need to handle changes at the end
             //of the update cycle instead of whenever.
             SetupListeners();
@@ -77,15 +79,10 @@ namespace Thermodynamics
             float largestSurface = Math.Max(size.X * size.Y, Math.Max(size.X * size.Z, size.Y * size.Z));
             float kA = Definition.Conductivity * (Area * largestSurface);
 
-            if (kA*C >= 1f) 
+            if (kA*C*Settings.Instance.TimeScaleRatio >= 1f) 
             {
-                MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id} has a transfer rate of ({kA * C}). Increase the SpecificHeat, Decrease the Conductivity, or increase the update frequency");
+                MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id} has a transfer rate of ({kA * C * Settings.Instance.TimeScaleRatio}). Increase the SpecificHeat, Decrease the Conductivity, or increase the update frequency");
             }
-
-
-            //
-            //CubeArea = 2 * (size.X * size.Z + size.Y * size.Z + size.X * size.Y);
-            //CubeAreaInv = 1f / CubeArea;
 
             UpdateHeat();
         }
@@ -465,8 +462,9 @@ namespace Thermodynamics
         /// </summary>
         internal void Update()
         {
-            // update to the new frame
-            Frame++;
+            // cells are only looked at once per frame. cells must keep track of their unultered temperature (LastTemperature)
+            // so that all blocks are working with the same simulation frame data.
+            Frame = Grid.SimulationFrame;
             LastTemprature = Temperature;
 
             // calculate delta between all neighboring blocks
@@ -481,15 +479,19 @@ namespace Thermodynamics
                 // kA = watt * meter / Temp
                 float kA = Definition.Conductivity * area * TouchingSerfacesByNeighbor[i];
 
-                // deltaTemperature = watt * meter
+                // if the neighboring blocks have not been updated use temperature
+                // otherwise use LastTemperature
                 if (ncell.Frame != Frame)
                 {
+                    // deltaTemperature = watt * meter
                     deltaTemperature += kA * (ncell.Temperature - Temperature);
                 }
                 else
                 {
                     deltaTemperature += kA * (ncell.LastTemprature - Temperature);
                 }
+
+                //MyLog.Default.Info($"[{Settings.Name}] {Id}->{ncell.Id} ns: {TouchingSerfacesByNeighbor[i]} T: {Temperature} nT: {ncell.Temperature} dT: {deltaTemperature}");
             }
 
             // use Stefan-Boltzmann Law to calculate the energy lossed/gained from the environment
@@ -523,6 +525,7 @@ namespace Thermodynamics
             //    Temperature += Area * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * c * Settings.Instance.TimeScaleRatio;
             //}
 
+            
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
             {
                 Vector3 color = Tools.GetTemperatureColor(Temperature);
@@ -532,6 +535,7 @@ namespace Thermodynamics
                     Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, color);
                 }
             }
+            
         }
 
         /// <summary>

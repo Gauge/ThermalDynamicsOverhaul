@@ -39,10 +39,32 @@ namespace Thermodynamics
         public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
         public ThermalRadiationNode SolarRadiationNode = new ThermalRadiationNode();
 
-        private int IterationIndex = 0;
-        private int CountPerFrame = 0;
-        private int UpdateDirection = 0;
+        /// <summary>
+        /// updated first before each frame
+        /// this is used to keep cells in sync with eachother and across the network
+        /// </summary>
+        public int SimulationFrame = 0;
+
+        /// <summary>
+        /// update loop index
+        /// updates happen across frames
+        /// </summary>
+        private int SimulationIndex = 0;
+
+        /// <summary>
+        /// updates cycle between updating first to last, last to first
+        /// this ensures an even distribution of heat.
+        /// </summary>
+        private int Direction = -1;
+
+        /// <summary>
+        /// The number of cells to process in a 1 second interval
+        /// </summary>
+        private int SimulationQuota = 0;
+
+
         public bool ThermalCellUpdateComplete = true;
+
 
         public Vector3 FrameSolarDirection;
         public MatrixD FrameMatrix;
@@ -73,7 +95,7 @@ namespace Thermodynamics
             Grid.OnBlockAdded += BlockAdded;
             Grid.OnBlockRemoved += BlockRemoved;
 
-            NeedsUpdate =  MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
         public override bool IsSerialized()
@@ -126,9 +148,11 @@ namespace Thermodynamics
                 f |= bytes[i + 6] << 16;
                 f |= bytes[i + 7] << 24;
 
-                //MyLog.Default.Info($"[{Settings.Name}] [Unpack] {id} - T: {f*0.001f}");
+
 
                 Thermals.list[PositionToIndex[id]].Temperature = f * 0.001f;
+
+                //MyLog.Default.Info($"[{Settings.Name}] [Unpack] {id} {PositionToIndex[id]} {Thermals.list[PositionToIndex[id]].Block.BlockDefinition.Id} - T: {f * 0.001f}");
             }
         }
 
@@ -156,16 +180,10 @@ namespace Thermodynamics
         private void Load()
         {
             Stopwatch sw = Stopwatch.StartNew();
-            try
-            {
-                if (Entity.Storage.ContainsKey(StorageGuid))
-                {
-                    Unpack(Entity.Storage[StorageGuid]);
-                }
-            }
-            catch
-            {
 
+            if (Entity.Storage.ContainsKey(StorageGuid))
+            {
+                Unpack(Entity.Storage[StorageGuid]);
             }
 
             sw.Stop();
@@ -184,13 +202,14 @@ namespace Thermodynamics
 
             cell.AddAllNeighbors();
 
-            //MyLog.Default.Info($"[{Settings.Name}] Added {Grid.EntityId} ({b.Position.Flatten()}) {b.Position} --- {type}/{subtype}");
+            //MyLog.Default.Info($"[{Settings.Name}] [{Grid.EntityId}] Added ({b.Position.Flatten()}) {b.Position}");
 
             int index = Thermals.Allocate();
             PositionToIndex.Add(cell.Id, index);
             Thermals.list[index] = cell;
 
-            CountPerFrame = GetCountPerFrame();
+            //MyLog.Default.Info($"[{Settings.Name}] {Grid.Name}: {index} - {cell.Id} null: {Thermals.list[index] == null} --- {b.BlockDefinition.Id}");
+
             ExternalBlockReset();
         }
 
@@ -198,11 +217,11 @@ namespace Thermodynamics
         {
             if (Grid.EntityId != b.CubeGrid.EntityId)
             {
-                //MyLog.Default.Info($"[{Settings.Name}] Removing Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
+                MyLog.Default.Info($"[{Settings.Name}] Removing Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
                 return;
             }
 
-            //MyLog.Default.Info($"[{Settings.Name}] Removed {Grid.EntityId} ({b.Position.Flatten()}) {b.Position}");
+            //MyLog.Default.Info($"[{Settings.Name}] [{Grid.EntityId}] Removed ({b.Position.Flatten()}) {b.Position}");
 
             int flat = b.Position.Flatten();
             int index = PositionToIndex[flat];
@@ -221,7 +240,6 @@ namespace Thermodynamics
             PositionToIndex.Remove(flat);
             Thermals.Free(index);
 
-            CountPerFrame = GetCountPerFrame();
             ExternalBlockReset();
         }
 
@@ -248,6 +266,9 @@ namespace Thermodynamics
 
         private void GridMerge(MyCubeGrid g1, MyCubeGrid g2)
         {
+
+            MyLog.Default.Info($"[{Settings.Name}] Grid Merge - G1: {g1.EntityId} G2: {g2.EntityId}");
+
             ThermalGrid tg1 = g1.GameLogic.GetAs<ThermalGrid>();
             ThermalGrid tg2 = g2.GameLogic.GetAs<ThermalGrid>();
 
@@ -273,88 +294,83 @@ namespace Thermodynamics
             }
 
             Load();
-            PrepareNextFrame();
+            PrepareNextSimulationStep();
+            SimulationQuota = GetSimulationQuota();
         }
 
-
-        
 
         public override void UpdateBeforeSimulation()
         {
-            try
+            SimulationFrame++;
+
+            // if you are done processing the required blocks this simulation
+            // wait for the start of the next second interval
+            if (SimulationQuota == 0)
             {
-                bool isNewFrame = true;
-                int quota = CountPerFrame;
-                int count = Thermals.UsedLength;
-
-                MyAPIGateway.Utilities.ShowNotification($"[Loop] c: {count} fpc: {60f / Settings.Instance.Frequency} cpf: {CountPerFrame} cpc: {60f / Settings.Instance.Frequency * CountPerFrame} Index: {IterationIndex}", 1, "White");
-                while (quota > 0)
+                if (SimulationFrame % 60 == 0)
                 {
-                    // finds the remaining cells in the simulation
-                    int workCount = count - IterationIndex;
-                    // if the remaining work this frame is less than the full simulation
-                    // end the work early, otherwise complete all the cells
-                    if (quota < workCount)
-                    {
-                        workCount = quota;
-                    }
-
-                    // WorkDone + WorkRemaining = target work.
-                    // Since we are picking up in the middle of the simulation and index wont always be 0
-                    int target = IterationIndex + workCount;
-
-                    while (IterationIndex < target)
-                    {
-                        ThermalCell cell = Thermals.list[(UpdateDirection == 0) ? IterationIndex : UpdateDirection - IterationIndex];
-                        if (cell != null)
-                        {
-                            if (!ThermalCellUpdateComplete)
-                            {
-                                cell.UpdateSurfaces(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
-                            }
-
-                            cell.Update();
-                        }
-
-                        IterationIndex++;
-                    }
-
-                    // remove the work done so far
-                    quota -= workCount;
-
-                    if (IterationIndex >= count)
-                    {
-                        MapExternalBlocks();
-                        PrepareNextFrame();
-
-                        IterationIndex = 0;
-                        UpdateDirection = UpdateDirection == 0 ? count : 0;
-
-                        if (!ThermalCellUpdateComplete)
-                            ThermalCellUpdateComplete = true;
-
-                        if (!NodeUpdateComplete &&
-                            ExposedQueue.Count == 0 &&
-                            SolidQueue.Count == 0 &&
-                            InsideQueue.Count == 0)
-                        {
-                            NodeUpdateComplete = true;
-                            ThermalCellUpdateComplete = false;
-                        }
-                    }
+                    SimulationQuota = GetSimulationQuota();
+                }
+                else
+                {
+                    return;
                 }
             }
-            catch(Exception e) 
+
+            int frameQuota = GetFrameQuota();
+            int cellCount = Thermals.UsedLength;
+
+            //MyAPIGateway.Utilities.ShowNotification($"[Loop] c: {count} frameC: {QuotaPerSecond} simC: {60f * QuotaPerSecond}", 1, "White");
+
+            while (frameQuota > 0)
             {
+                if (SimulationQuota == 0) break;
+
+                // prepare for the next simulation after a full iteration
+                if (SimulationIndex == cellCount || SimulationIndex == -1)
+                {
+                    MapExternalBlocks();
+                    PrepareNextSimulationStep();
+
+                    // reverse the index direction
+                    Direction *= -1;
+                    // make sure the end cells in the list go once per frame
+                    SimulationIndex += Direction;
+
+                    if (!ThermalCellUpdateComplete)
+                        ThermalCellUpdateComplete = true;
+
+                    if (!NodeUpdateComplete &&
+                        ExposedQueue.Count == 0 &&
+                        SolidQueue.Count == 0 &&
+                        InsideQueue.Count == 0)
+                    {
+                        NodeUpdateComplete = true;
+                        ThermalCellUpdateComplete = false;
+                    }
+                }
+
+                //MyLog.Default.Info($"[{Settings.Name}] Step {SimulationFrame}: index: {SimulationIndex} quota: {SimulationQuota} frame quota: {frameQuota}");
+                ThermalCell cell = Thermals.list[SimulationIndex];
+
+                if (cell != null)
+                {
+                    if (!ThermalCellUpdateComplete)
+                    {
+                        cell.UpdateSurfaces(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
+                    }
+
+                    cell.Update();
+                }
+
+                frameQuota--;
+                SimulationQuota--;
+                SimulationIndex += Direction;
             }
-        }
-
-        private void PrepareNextSim() {
-            
 
         }
 
-        private void PrepareNextFrame()
+        private void PrepareNextSimulationStep()
         {
             SolarRadiationNode.Update();
 
@@ -394,7 +410,7 @@ namespace Thermodynamics
 
                 //TODO: implement underground core temparatures
             }
-            else 
+            else
             {
                 FrameAmbientStrength = Settings.Instance.VaccumeRadiationStrength;
                 FrameAmbientStrength = Settings.Instance.PresurizedAtmoConductivity;
@@ -425,8 +441,8 @@ namespace Thermodynamics
                         FrameSolarOccluded = true;
                         break;
                     }
-                } 
-                
+                }
+
                 if (e is MyVoxelBase)
                 {
                     MyVoxelBase voxel = e as MyVoxelBase;
@@ -446,14 +462,14 @@ namespace Thermodynamics
                         break;
                     }
                 }
-                
+
                 if (e is MyCubeGrid && e.Physics != null && e.EntityId != Grid.EntityId)
                 {
                     MyCubeGrid g = (e as MyCubeGrid);
                     List<MyCubeGrid> grids = new List<MyCubeGrid>();
                     g.GetConnectedGrids(GridLinkTypeEnum.Physical, grids);
 
-                    for (int j = 0; j < grids.Count; j++) 
+                    for (int j = 0; j < grids.Count; j++)
                     {
                         if (grids[j].EntityId == Grid.EntityId) continue;
                     }
@@ -465,7 +481,7 @@ namespace Thermodynamics
 
                     Vector3I? hit = (e as MyCubeGrid).RayCastBlocks(subLine.From, subLine.To);
 
-                    if (hit.HasValue) 
+                    if (hit.HasValue)
                     {
                         FrameSolarOccluded = true;
                         break;
@@ -479,13 +495,19 @@ namespace Thermodynamics
 
 
         /// <summary>
-        /// divide the total number of cells by the update frequency (updates per second) gets you the number of cells per simulation cycle per frame
-        /// then you multiply that by the number of simulations per second.
+        /// Calculates thermal cell count second to match the desired simulation speed
         /// </summary>
-        /// <returns></returns>
-        public int GetCountPerFrame()
+        public int GetSimulationQuota()
         {
-            return Math.Max(1, (int)(Thermals.UsedLength * (Settings.Instance.Frequency / 60f) * Settings.Instance.SimulationSpeed));
+            return Math.Max(1, (int)(Thermals.UsedLength * Settings.Instance.SimulationSpeed * Settings.Instance.Frequency));
+        }
+
+        /// <summary>
+        /// Calculates the thermal cell count required each frame
+        /// </summary>
+        public int GetFrameQuota()
+        {
+            return Math.Max(1, (int)((Thermals.UsedLength * Settings.Instance.SimulationSpeed * Settings.Instance.Frequency) / 60f));
         }
 
         /// <summary>
