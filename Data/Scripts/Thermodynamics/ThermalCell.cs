@@ -23,7 +23,7 @@ namespace Thermodynamics
     public class ThermalCell
     {
         public int Id;
-        public int Frame;
+        public long Frame;
 
         public float Temperature;
         public float DeltaTemperature;

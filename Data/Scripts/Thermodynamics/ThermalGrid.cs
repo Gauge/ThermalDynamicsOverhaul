@@ -40,10 +40,9 @@ namespace Thermodynamics
         public ThermalRadiationNode SolarRadiationNode = new ThermalRadiationNode();
 
         /// <summary>
-        /// updated first before each frame
-        /// this is used to keep cells in sync with eachother and across the network
+        /// current frame per second
         /// </summary>
-        public int SimulationFrame = 0;
+        public byte FrameCount = 0;
 
         /// <summary>
         /// update loop index
@@ -52,15 +51,28 @@ namespace Thermodynamics
         private int SimulationIndex = 0;
 
         /// <summary>
-        /// updates cycle between updating first to last, last to first
-        /// this ensures an even distribution of heat.
-        /// </summary>
-        private int Direction = -1;
-
-        /// <summary>
         /// The number of cells to process in a 1 second interval
         /// </summary>
         private int SimulationQuota = 0;
+
+        /// <summary>
+        /// The fractional number of cells to process this frame
+        /// the remainder is carried over to the next frame
+        /// </summary>
+        public float FrameQuota = 0;
+
+        /// <summary>
+        /// The total number of simulations since grid life
+        /// </summary>
+        public long SimulationFrame = 1;
+
+
+
+        /// <summary>
+        /// updates cycle between updating first to last, last to first
+        /// this ensures an even distribution of heat.
+        /// </summary>
+        private int Direction = 1;
 
 
         public bool ThermalCellUpdateComplete = true;
@@ -301,15 +313,18 @@ namespace Thermodynamics
 
         public override void UpdateBeforeSimulation()
         {
-            SimulationFrame++;
+            FrameCount++;
+            //MyAPIGateway.Utilities.ShowNotification($"[Loop] f: {MyAPIGateway.Session.GameplayFrameCounter} fc: {FrameCount} sf: {SimulationFrame} sq: {SimulationQuota}", 1, "White");
 
-            // if you are done processing the required blocks this simulation
+            // if you are done processing the required blocks this second
             // wait for the start of the next second interval
             if (SimulationQuota == 0)
             {
-                if (SimulationFrame % 60 == 0)
+                if (FrameCount >= 60)
                 {
                     SimulationQuota = GetSimulationQuota();
+                    FrameCount = 0;
+                    FrameQuota = 0;
                 }
                 else
                 {
@@ -317,18 +332,21 @@ namespace Thermodynamics
                 }
             }
 
-            int frameQuota = GetFrameQuota();
+            FrameQuota += GetFrameQuota();
             int cellCount = Thermals.UsedLength;
 
             //MyAPIGateway.Utilities.ShowNotification($"[Loop] c: {count} frameC: {QuotaPerSecond} simC: {60f * QuotaPerSecond}", 1, "White");
 
-            while (frameQuota > 0)
+            while (FrameQuota >= 1)
             {
                 if (SimulationQuota == 0) break;
 
                 // prepare for the next simulation after a full iteration
                 if (SimulationIndex == cellCount || SimulationIndex == -1)
                 {
+                    // start a new simulation frame
+                    SimulationFrame++;
+
                     MapExternalBlocks();
                     PrepareNextSimulationStep();
 
@@ -350,7 +368,7 @@ namespace Thermodynamics
                     }
                 }
 
-                //MyLog.Default.Info($"[{Settings.Name}] Step {SimulationFrame}: index: {SimulationIndex} quota: {SimulationQuota} frame quota: {frameQuota}");
+                //MyLog.Default.Info($"[{Settings.Name}] Frame: {FrameCount} SimFrame: {SimulationFrame}: Index: {SimulationIndex} Quota: {SimulationQuota} FrameQuota:{FrameQuota}");
                 ThermalCell cell = Thermals.list[SimulationIndex];
 
                 if (cell != null)
@@ -363,7 +381,7 @@ namespace Thermodynamics
                     cell.Update();
                 }
 
-                frameQuota--;
+                FrameQuota--;
                 SimulationQuota--;
                 SimulationIndex += Direction;
             }
@@ -372,6 +390,7 @@ namespace Thermodynamics
 
         private void PrepareNextSimulationStep()
         {
+
             SolarRadiationNode.Update();
 
             FrameSolarOccluded = false;
@@ -505,9 +524,9 @@ namespace Thermodynamics
         /// <summary>
         /// Calculates the thermal cell count required each frame
         /// </summary>
-        public int GetFrameQuota()
+        public float GetFrameQuota()
         {
-            return Math.Max(1, (int)((Thermals.UsedLength * Settings.Instance.SimulationSpeed * Settings.Instance.Frequency) / 60f));
+            return 0.00000001f + ((Thermals.UsedLength * Settings.Instance.SimulationSpeed * Settings.Instance.Frequency) / 60f);
         }
 
         /// <summary>
