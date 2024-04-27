@@ -72,7 +72,7 @@ namespace Thermodynamics
 
             Mass = Block.Mass;
             Area = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
-            C = 1 / (Definition.SpecificHeat * Block.CubeGrid.GridSize);
+            C = 1 / (Definition.SpecificHeat * Mass * Block.CubeGrid.GridSize);
             ThermalMassInv = 1f / (Definition.SpecificHeat * Mass);
 
             Vector3I size = (Block.Max - Block.Min) + 1;
@@ -224,7 +224,7 @@ namespace Thermodynamics
             {
                 if (def.FuelConverter.FuelId == MyResourceDistributorComponent.ElectricityId)
                 {
-                    PowerConsumed = (def.MinPowerConsumption + (def.MaxPowerConsumption * (block.CurrentThrust / block.MaxThrust))) * Tools.MWtoWatt;
+                    PowerConsumed = Math.Max(def.MinPowerConsumption, (def.MaxPowerConsumption * (block.CurrentThrust / block.MaxThrust))) * Tools.MWtoWatt;
                 }
                 else
                 {
