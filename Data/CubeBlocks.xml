@@ -12,15 +12,17 @@
 					<!-- For Conductivity examples see https://www.engineeringtoolbox.com/thermal-conductivity-metals-d_858.html -->
 					<!-- Values generally range from 0 to 500. most material should be under 100-->
 					<!-- This assume the temperature is absolute 0 and will deminish as temperature rises-->
-					<Decimal Name="Conductivity" Value="15" />
+					<Decimal Name="Conductivity" Value="700" />
 					<!--For specific heat examples see https://en.wikipedia.org/wiki/Table_of_specific_heat_capacities-->
 					<!--Make sure to convert from g to kg my multiplying 1000-->
-					<Decimal Name="SpecificHeat" Value="500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<!-- For examples of Emissivity see https://www.engineeringtoolbox.com/emissivity-coefficients-d_447.html-->
 					<!--This is a number between 0 and 1 that represents how much energy will radiate away -->
 					<Decimal Name="Emissivity" Value="0.25" />
-					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
+					<Decimal Name="ConsumerWasteEnergy" Value="0.05" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -32,11 +34,13 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="100" />
-					<Decimal Name="SpecificHeat" Value="2000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
-					<Decimal Name="ProducerWasteEnergy" Value="0.05" />
+					<Decimal Name="ProducerWasteEnergy" Value="0.1" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -50,11 +54,13 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="19.5" />
+					<Decimal Name="Conductivity" Value="1500" />
 					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -66,11 +72,13 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="10.5" />
-					<Decimal Name="SpecificHeat" Value="50" />
+					<Decimal Name="Conductivity" Value="1100" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -82,11 +90,13 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="10.5" />
+					<Decimal Name="Conductivity" Value="1500" />
 					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -98,11 +108,13 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="19.5" />
+					<Decimal Name="Conductivity" Value="1500" />
 					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -114,161 +126,181 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="10.5" />
-					<Decimal Name="SpecificHeat" Value="50" />
+					<Decimal Name="Conductivity" Value="1100" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
-		<!-- Thrusters -->
+		<!-- Thrusts -->
 		
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>DefaultThermodynamics</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.2" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
-		<!-- Hydrogen Thrusters Large -->
+		<!-- Hydrogen Thrusts Large -->
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>LargeBlockLargeHydrogenThrustIndustrial</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 		
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>LargeBlockSmallHydrogenThrustIndustrial</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>LargeBlockLargeHydrogenThrust</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>LargeBlockSmallHydrogenThrust</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
-		<!-- Hydrogen Thrusters Small -->
+		<!-- Hydrogen Thrusts Small -->
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>SmallBlockLargeHydrogenThrustIndustrial</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>SmallBlockSmallHydrogenThrustIndustrial</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>SmallBlockLargeHydrogenThrust</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
 
 		<Definition>
 			<Id>
-				<TypeId>Thruster</TypeId>
+				<TypeId>Thrust</TypeId>
 				<SubtypeId>SmallBlockSmallHydrogenThrust</SubtypeId>
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="44" />
-					<Decimal Name="SpecificHeat" Value="1000" />
+					<Decimal Name="Conductivity" Value="1500" />
+					<Decimal Name="SpecificHeat" Value="100" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
-					<Decimal Name="ConsumerWasteEnergy" Value="0.4" />
+					<Decimal Name="ConsumerWasteEnergy" Value="3" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>
@@ -283,11 +315,13 @@
 			</Id>
 			<ModExtensions>
 				<Group Name="ThermalBlockProperties">
-					<Decimal Name="Conductivity" Value="7" />
+					<Decimal Name="Conductivity" Value="10" />
 					<Decimal Name="SpecificHeat" Value="50" />
 					<Decimal Name="Emissivity" Value="0.25" />
 					<Decimal Name="ProducerWasteEnergy" Value="0.01" />
 					<Decimal Name="ConsumerWasteEnergy" Value="0.01" />
+					<Decimal Name="CriticalTemperature" Value="1000" />
+					<Decimal Name="CriticalTemperatureScaler" Value="1"/>
 				</Group>
 			</ModExtensions>
 		</Definition>

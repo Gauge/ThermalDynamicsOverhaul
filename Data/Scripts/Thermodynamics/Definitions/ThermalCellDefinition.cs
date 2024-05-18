@@ -18,6 +18,8 @@ namespace Thermodynamics
         private static readonly MyStringId EmissivityId = MyStringId.GetOrCompute("Emissivity");
         private static readonly MyStringId ProducerWasteEnergyId = MyStringId.GetOrCompute("ProducerWasteEnergy");
         private static readonly MyStringId ConsumerWasteEnergyId = MyStringId.GetOrCompute("ConsumerWasteEnergy");
+        private static readonly MyStringId CriticalTemperatureId = MyStringId.GetOrCompute("CriticalTemperature");
+        private static readonly MyStringId CriticalTemperatureScalerId = MyStringId.GetOrCompute("CriticalTemperatureScaler");
         private static readonly MyDefinitionId DefaultCubeBlockDefinitionId = new MyDefinitionId(typeof(MyObjectBuilder_EnvironmentDefinition), Settings.DefaultSubtypeId);
 
 
@@ -54,6 +56,12 @@ namespace Thermodynamics
         [ProtoMember(30)]
         public float ConsumerWasteEnergy;
 
+        [ProtoMember(40)]
+        public float CriticalTemperature;
+
+        [ProtoMember(45)]
+        public float CriticalTemperatureScaler;
+
 
         public static ThermalCellDefinition GetDefinition(MyDefinitionId defId)
         {
@@ -87,6 +95,11 @@ namespace Thermodynamics
             if (lookup.TryGetDouble(defId, GroupId, ConsumerWasteEnergyId, out dvalue))
                 def.ConsumerWasteEnergy = (float)dvalue;
 
+            if (lookup.TryGetDouble(defId, GroupId, CriticalTemperatureId, out dvalue))
+                def.CriticalTemperature = (float)dvalue;
+
+            if (lookup.TryGetDouble(defId, GroupId, CriticalTemperatureScalerId, out dvalue))
+                def.CriticalTemperatureScaler = (float)dvalue;
 
             def.Conductivity = Math.Max(0, def.Conductivity);
 
@@ -97,6 +110,10 @@ namespace Thermodynamics
             def.ProducerWasteEnergy = Math.Max(0, def.ProducerWasteEnergy);
 
             def.ConsumerWasteEnergy = Math.Max(0, def.ConsumerWasteEnergy);
+
+            def.CriticalTemperature = Math.Max(0, def.CriticalTemperature);
+
+            def.CriticalTemperatureScaler = Math.Max(0, Math.Min(1, def.CriticalTemperatureScaler));
 
             return def;
         }

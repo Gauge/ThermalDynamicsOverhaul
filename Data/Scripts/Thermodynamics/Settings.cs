@@ -67,8 +67,8 @@ namespace Thermodynamics
 			Settings s = new Settings {
 				Version = 1,
 				Frequency = 1,
-				SimulationSpeed = 5,
-                SolarEnergy = 1400f, 
+				SimulationSpeed = 1,
+                SolarEnergy = 1000f, 
 				EnvironmentalRaycastDistance = 5000f,
 				VaccumeRadiationStrength = 0.05f,
 				PresurizedAtmoConductivity = 0.026f,

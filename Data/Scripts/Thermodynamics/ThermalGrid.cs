@@ -66,8 +66,6 @@ namespace Thermodynamics
         /// </summary>
         public long SimulationFrame = 1;
 
-
-
         /// <summary>
         /// updates cycle between updating first to last, last to first
         /// this ensures an even distribution of heat.
@@ -81,9 +79,7 @@ namespace Thermodynamics
         public Vector3 FrameSolarDirection;
         public MatrixD FrameMatrix;
 
-        public float FrameAmbientConductivity;
-        public float FrameAmbientTemprature;
-        public float FrameAmbientStrength;
+        public float FrameAmbientTempratureP4;
         public float FrameSolarDecay;
         public bool FrameSolarOccluded;
 
@@ -313,6 +309,7 @@ namespace Thermodynamics
 
         public override void UpdateBeforeSimulation()
         {
+            
             FrameCount++;
             //MyAPIGateway.Utilities.ShowNotification($"[Loop] f: {MyAPIGateway.Session.GameplayFrameCounter} fc: {FrameCount} sf: {SimulationFrame} sq: {SimulationQuota}", 1, "White");
 
@@ -337,6 +334,7 @@ namespace Thermodynamics
 
             //MyAPIGateway.Utilities.ShowNotification($"[Loop] c: {count} frameC: {QuotaPerSecond} simC: {60f * QuotaPerSecond}", 1, "White");
 
+            //Stopwatch sw = Stopwatch.StartNew();
             while (FrameQuota >= 1)
             {
                 if (SimulationQuota == 0) break;
@@ -368,9 +366,10 @@ namespace Thermodynamics
                     }
                 }
 
-                //MyLog.Default.Info($"[{Settings.Name}] Frame: {FrameCount} SimFrame: {SimulationFrame}: Index: {SimulationIndex} Quota: {SimulationQuota} FrameQuota:{FrameQuota}");
-                ThermalCell cell = Thermals.list[SimulationIndex];
 
+                //MyLog.Default.Info($"[{Settings.Name}] Frame: {FrameCount} SimFrame: {SimulationFrame}: Index: {SimulationIndex} Quota: {SimulationQuota} FrameQuota:{FrameQuota}");
+                
+                ThermalCell cell = Thermals.list[SimulationIndex];
                 if (cell != null)
                 {
                     if (!ThermalCellUpdateComplete)
@@ -385,12 +384,13 @@ namespace Thermodynamics
                 SimulationQuota--;
                 SimulationIndex += Direction;
             }
+            //sw.Stop();
+            //MyLog.Default.Info($"[{Settings.Name}] [UpdateLoop] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms");
 
         }
 
         private void PrepareNextSimulationStep()
         {
-
             SolarRadiationNode.Update();
 
             FrameSolarOccluded = false;
@@ -420,19 +420,11 @@ namespace Thermodynamics
                     FrameSolarOccluded = true;
                 }
 
-                FrameAmbientTemprature = Math.Max(2.7f, ambient * airDensity);
+                FrameAmbientTempratureP4 = Math.Max(2.7f, ambient * airDensity);
+                FrameAmbientTempratureP4 = FrameAmbientTempratureP4 * FrameAmbientTempratureP4 * FrameAmbientTempratureP4 * FrameAmbientTempratureP4;
                 FrameSolarDecay = 1 - def.SolarDecay * airDensity;
-                FrameAmbientStrength = Math.Max(Settings.Instance.VaccumeRadiationStrength, airDensity);
-
-                FrameAmbientConductivity = def.AtmoConductivity;
-
 
                 //TODO: implement underground core temparatures
-            }
-            else
-            {
-                FrameAmbientStrength = Settings.Instance.VaccumeRadiationStrength;
-                FrameAmbientStrength = Settings.Instance.PresurizedAtmoConductivity;
             }
 
             if (FrameSolarOccluded) return;

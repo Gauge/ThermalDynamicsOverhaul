@@ -39,29 +39,29 @@ namespace Thermodynamics
         public override void Simulate()
 		{
 
-			if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated)
+            if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated)
             {
                 //MyAPIGateway.Utilities.ShowNotification($"[Grid] Frequency: {Settings.Instance.Frequency}", 1, "White");
                 MatrixD matrix = MyAPIGateway.Session.Camera.WorldMatrix;
-				Vector3D start = matrix.Translation;
-				Vector3D end = start + (matrix.Forward * 15);
+                Vector3D start = matrix.Translation;
+                Vector3D end = start + (matrix.Forward * 15);
 
                 IHitInfo hit;
-				MyAPIGateway.Physics.CastRay(start, end, out hit);
-				MyCubeGrid grid = hit?.HitEntity as MyCubeGrid;
+                MyAPIGateway.Physics.CastRay(start, end, out hit);
+                MyCubeGrid grid = hit?.HitEntity as MyCubeGrid;
 
-				if (grid == null) return;
+                if (grid == null) return;
 
-				ThermalGrid g = grid.GameLogic.GetAs<ThermalGrid>();
-				Vector3I position = grid.WorldToGridInteger(hit.Position + (matrix.Forward * 0.05f));
-				IMySlimBlock block = grid.GetCubeBlock(position);
+                ThermalGrid g = grid.GameLogic.GetAs<ThermalGrid>();
+                Vector3I position = grid.WorldToGridInteger(hit.Position + (matrix.Forward * 0.05f));
+                IMySlimBlock block = grid.GetCubeBlock(position);
 
-				if (block == null) return;
+                if (block == null) return;
 
-				ThermalCell c = g.Get(block.Position);
+                ThermalCell c = g.Get(block.Position);
 
-				if (c == null)
-					return;
+                if (c == null)
+                    return;
 
 
                 //MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
@@ -71,9 +71,8 @@ namespace Thermodynamics
                     $"sim: {Settings.Instance.SimulationSpeed.ToString("n2")} " +
                     $"freq: {Settings.Instance.Frequency.ToString("n2")} " +
                     $"tstep: {Settings.Instance.TimeScaleRatio.ToString("n2")} " +
-                    $"ambT: {g.FrameAmbientTemprature.ToString("n4")} " +
+                    $"ambT: {g.FrameAmbientTempratureP4.ToString("n4")} " +
                     $"decay: {g.FrameSolarDecay.ToString("n4")} " +
-                    $"atmo: {g.FrameAmbientStrength.ToString("n4")} " +
                     $"isOcc: {g.FrameSolarOccluded}", 1, "White");
 
                 MyAPIGateway.Utilities.ShowNotification($"[Cell] {c.Block.Position} " +
@@ -84,14 +83,18 @@ namespace Thermodynamics
 
                 MyAPIGateway.Utilities.ShowNotification(
                     $"[Calc] m: {c.Mass.ToString("n0")} " +
-                    $"k: {(c.Definition.Conductivity).ToString("n2")} " +
+                    $"k: {c.Definition.Conductivity} " +
+                    $"sh {c.Definition.SpecificHeat} " +
+                    $"em {c.Definition.Emissivity} " +
+                    $"pwe: {c.Definition.ProducerWasteEnergy} " +
+                    $"cwe: {c.Definition.ConsumerWasteEnergy} " +
                     $"kA: {(c.Definition.Conductivity * c.Area).ToString("n0")} " +
-                    $"th: {(c.Definition.SpecificHeat * c.Mass).ToString("n0")} " +
+                    $"tm: {(c.Definition.SpecificHeat * c.Mass).ToString("n0")} " +
                     $"c: {c.C.ToString("n4")} " +
                     $"r: {c.Radiation.ToString("n2")} " +
                     $"rdt: {(c.Radiation * c.ThermalMassInv).ToString("n4")} " +
-                    $"proW: {(c.PowerProduced * c.Definition.ProducerWasteEnergy).ToString("n0")} " +
-                    $"conW: {(c.PowerConsumed * c.Definition.ConsumerWasteEnergy).ToString("n0")} ", 1, "White");
+                    $"prod: {c.EnergyProduction} " +
+                    $"cons: {(c.EnergyConsumption + c.ThrustEnergyConsumption)} ", 1, "White");
 
                 //MyAPIGateway.Utilities.ShowNotification($"[Solar] {c.SolarIntensity.ToString("n3")} Average: {g.AverageSolarHeat[0].ToString("n3")}, {tGrid.AverageSolarHeat[1].ToString("n3")}, {tGrid.AverageSolarHeat[2].ToString("n3")}, {tGrid.AverageSolarHeat[3].ToString("n3")}, {tGrid.AverageSolarHeat[4].ToString("n3")}, {tGrid.AverageSolarHeat[5].ToString("n3")}", 1, "White");
 

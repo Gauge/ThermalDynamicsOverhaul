@@ -17,6 +17,7 @@ using VRage.ObjectBuilders;
 using System.IO.Compression;
 using VRage.Game.Components.Interfaces;
 using System.Drawing;
+using System.Security.AccessControl;
 
 namespace Thermodynamics
 {
@@ -26,11 +27,12 @@ namespace Thermodynamics
         public long Frame;
 
         public float Temperature;
-        public float DeltaTemperature;
         public float LastTemprature;
+        public float DeltaTemperature;
 
-        public float PowerProduced;
-        public float PowerConsumed;
+        public float EnergyProduction;
+        public float EnergyConsumption;
+        public float ThrustEnergyConsumption;
         public float HeatGeneration;
 
         public float C; // c =  Temp / (watt * meter)
@@ -39,10 +41,6 @@ namespace Thermodynamics
         public float ExposedSurfaceArea; // m^2 of all exposed faces on this block
         public float Radiation;
         public float ThermalMassInv; // 1 / SpecificHeat * Mass
-
-
-        //public float CubeArea;
-        //public float CubeAreaInv;
 
         public ThermalGrid Grid;
         public IMySlimBlock Block;
@@ -64,7 +62,7 @@ namespace Thermodynamics
             Id = b.Position.Flatten();
             Definition = ThermalCellDefinition.GetDefinition(Block.BlockDefinition.Id);
 
-            //MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id}");
+            MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id}");
 
             //TODO: the listeners need to handle changes at the end
             //of the update cycle instead of whenever.
@@ -79,13 +77,9 @@ namespace Thermodynamics
             float largestSurface = Math.Max(size.X * size.Y, Math.Max(size.X * size.Z, size.Y * size.Z));
             float kA = Definition.Conductivity * (Area * largestSurface);
 
-            if (kA*C*Settings.Instance.TimeScaleRatio >= 1f) 
-            {
-                MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id} has a transfer rate of ({kA * C * Settings.Instance.TimeScaleRatio}). Increase the SpecificHeat, Decrease the Conductivity, or increase the update frequency");
-            }
-
             UpdateHeat();
         }
+
         private void SetupListeners()
         {
             if (Block.FatBlock == null) return;
@@ -182,6 +176,32 @@ namespace Thermodynamics
             }
         }
 
+        private void OnComponentAdded(Type compType, IMyEntityComponentBase component)
+        {
+            if (compType == typeof(MyResourceSourceComponent))
+            {
+                (component as MyResourceSourceComponent).OutputChanged += PowerProducedChanged;
+            }
+
+            if (compType == typeof(MyResourceSinkComponent))
+            {
+                (component as MyResourceSinkComponent).CurrentInputChanged += PowerConsumedChanged;
+            }
+        }
+
+        private void OnComponentRemoved(Type compType, IMyEntityComponentBase component)
+        {
+            if (compType == typeof(MyResourceSourceComponent))
+            {
+                (component as MyResourceSourceComponent).OutputChanged -= PowerProducedChanged;
+            }
+
+            if (compType == typeof(MyResourceSinkComponent))
+            {
+                (component as MyResourceSinkComponent).CurrentInputChanged -= PowerConsumedChanged;
+            }
+        }
+
         private void GridGroupChanged(IMyMechanicalConnectionBlock block)
         {
             ThermalGrid g = block.CubeGrid.GameLogic.GetAs<ThermalGrid>();
@@ -219,50 +239,8 @@ namespace Thermodynamics
         {
             MyThrustDefinition def = block.SlimBlock.BlockDefinition as MyThrustDefinition;
 
-
-            if (block.IsWorking)
-            {
-                if (def.FuelConverter.FuelId == MyResourceDistributorComponent.ElectricityId)
-                {
-                    PowerConsumed = Math.Max(def.MinPowerConsumption, (def.MaxPowerConsumption * (block.CurrentThrust / block.MaxThrust))) * Tools.MWtoWatt;
-                }
-                else
-                {
-                    PowerConsumed = def.ForceMagnitude * (block.CurrentThrust / block.MaxThrust);
-                }
-            }
-            else
-            {
-                PowerConsumed = 0;
-            }
-
+            ThrustEnergyConsumption = def.ForceMagnitude * (block.CurrentThrust / block.MaxThrust);
             UpdateHeat();
-        }
-
-        private void OnComponentAdded(Type compType, IMyEntityComponentBase component)
-        {
-            if (compType == typeof(MyResourceSourceComponent))
-            {
-                (component as MyResourceSourceComponent).OutputChanged += PowerProducedChanged;
-            }
-
-            if (compType == typeof(MyResourceSinkComponent))
-            {
-                (component as MyResourceSinkComponent).CurrentInputChanged += PowerConsumedChanged;
-            }
-        }
-
-        private void OnComponentRemoved(Type compType, IMyEntityComponentBase component)
-        {
-            if (compType == typeof(MyResourceSourceComponent))
-            {
-                (component as MyResourceSourceComponent).OutputChanged -= PowerProducedChanged;
-            }
-
-            if (compType == typeof(MyResourceSinkComponent))
-            {
-                (component as MyResourceSinkComponent).CurrentInputChanged -= PowerConsumedChanged;
-            }
         }
 
         /// <summary>
@@ -270,39 +248,28 @@ namespace Thermodynamics
         /// </summary>
         private void PowerConsumedChanged(MyDefinitionId resourceTypeId, float oldInput, MyResourceSinkComponent sink)
         {
-            if (resourceTypeId == MyResourceDistributorComponent.ElectricityId)
+            try
             {
-                try
+                if (resourceTypeId == MyResourceDistributorComponent.ElectricityId)
                 {
-                    // power in watts
-                    PowerConsumed = sink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) * Tools.MWtoWatt;
+                    EnergyConsumption = sink.CurrentInputByType(resourceTypeId) * Tools.MWtoWatt;
                     UpdateHeat();
                 }
-                catch { }
             }
+            catch { }
         }
 
-        private void PowerProducedChanged(MyDefinitionId changedResourceId, float oldOutput, MyResourceSourceComponent source)
+        private void PowerProducedChanged(MyDefinitionId resourceTypeId, float oldOutput, MyResourceSourceComponent source)
         {
-            if (changedResourceId == MyResourceDistributorComponent.ElectricityId)
+            try
             {
-                try
+                if (resourceTypeId == MyResourceDistributorComponent.ElectricityId)
                 {
-                    // power in watts
-                    PowerProduced = source.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) * Tools.MWtoWatt;
+                    EnergyProduction = source.CurrentOutputByType(resourceTypeId) * Tools.MWtoWatt;
                     UpdateHeat();
                 }
-                catch { }
             }
-        }
-
-        private void UpdateHeat()
-        {
-            // power produced and consumed are in Watts or Joules per second.
-            // it gets multiplied by the waste energy percent and timescale ratio.
-            // we then have the heat in joules that needs to be converted into temprature.
-            // we do that by dividing it by the ThermalMass (SpecificHeat * Mass)
-            HeatGeneration = Settings.Instance.TimeScaleRatio * ((PowerProduced * Definition.ProducerWasteEnergy) + (PowerConsumed * Definition.ConsumerWasteEnergy)) * ThermalMassInv;
+            catch { }
         }
 
         public void ResetNeighbors()
@@ -373,6 +340,97 @@ namespace Thermodynamics
                 n2.TouchingSerfacesByNeighbor.RemoveAt(j);
             }
         }
+
+
+        public float GetTemperature()
+        {
+            return Temperature;
+        }
+
+        /// <summary>
+        /// Update the temperature of each cell in the grid
+        /// </summary>
+        internal void Update()
+        {
+            // cells are only looked at once per frame. cells must keep track of their unultered temperature (LastTemperature)
+            // so that all blocks are working with the same simulation frame data.
+            Frame = Grid.SimulationFrame;
+            LastTemprature = Temperature;
+
+            // calculate delta between all neighboring blocks
+            float deltaTemperature = 0;
+            for (int i = 0; i < Neighbors.Count; i++)
+            {
+                ThermalCell ncell = Neighbors[i];
+                // area = meter^2
+                float area = Area <= ncell.Area ? Area : ncell.Area;
+
+                // conductivity, k = watt / (meter * Temp)
+                // kA = watt * meter / Temp
+                float kA = Definition.Conductivity * area * TouchingSerfacesByNeighbor[i];
+
+                // if the neighboring blocks have not been updated use temperature
+                // otherwise use LastTemperature
+                if (ncell.Frame != Frame)
+                {
+                    // deltaTemperature = watt * meter
+                    deltaTemperature += kA * (ncell.Temperature - Temperature);
+                }
+                else
+                {
+                    deltaTemperature += kA * (ncell.LastTemprature - Temperature);
+                }
+
+                //MyLog.Default.Info($"[{Settings.Name}] {Id}->{ncell.Id} ns: {TouchingSerfacesByNeighbor[i]} T: {Temperature} nT: {ncell.Temperature} dT: {deltaTemperature}");
+            }
+
+            // use Stefan-Boltzmann Law to calculate the energy lossed/gained from the environment
+            // we make it nagiative to indicate removal of energy
+            Radiation = -1 * Definition.Emissivity * Tools.BoltzmannConstant * ExposedSurfaceArea * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTempratureP4);
+
+            if (!Grid.FrameSolarOccluded)
+            {
+                float intensity = DirectionalRadiationIntensity(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
+                Radiation += Settings.Instance.SolarEnergy * Definition.Emissivity * (intensity * ExposedSurfaceArea);
+            }
+
+            // C = Temp / Watt * meter and deltaTemperature = Watt * Meter.
+            // these cancel leaving only temperature behind
+            DeltaTemperature = ((C * deltaTemperature) + (Radiation * ThermalMassInv)) * Settings.Instance.TimeScaleRatio;
+            Temperature = Math.Max(0, Temperature + DeltaTemperature);
+
+            // generate heat based on power usage
+            Temperature += HeatGeneration;
+
+            if (Temperature > Definition.CriticalTemperature) 
+            {
+                Block.DoDamage((Temperature - Definition.CriticalTemperature), MyStringHash.GetOrCompute("thermal"), false);
+            }
+
+            if (Settings.Debug && MyAPIGateway.Session.IsServer)
+            {
+                Vector3 color = Tools.GetTemperatureColor(Temperature);
+                //Vector3 c = Tools.GetTemperatureColor(solarIntensity, 10, 0.5f, 4);
+                if (Block.ColorMaskHSV != color)
+                {
+                    Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, color);
+                }
+            }
+        }
+
+        private void UpdateHeat()
+        {
+            // power produced and consumed are in Watts or Joules per second.
+            // it gets multiplied by the waste energy percent and timescale ratio.
+            // we then have the heat in joules that needs to be converted into temprature.
+            // we do that by dividing it by the ThermalMass (SpecificHeat * Mass)
+
+
+            float produced = EnergyProduction * Definition.ProducerWasteEnergy;
+            float consumed = (EnergyConsumption + ThrustEnergyConsumption) * Definition.ConsumerWasteEnergy;
+            HeatGeneration = Settings.Instance.TimeScaleRatio * (produced + consumed) * ThermalMassInv;
+        }
+
 
         public void UpdateSurfaces(ref HashSet<Vector3I> exposed, ref HashSet<Vector3I> exposedSurface, ref HashSet<Vector3I> inside, ref HashSet<Vector3I> insideSurface)
         {
@@ -452,91 +510,6 @@ namespace Thermodynamics
             ExposedSurfaceArea = Exposed.Count * Area;
         }
 
-        public float GetTemperature()
-        {
-            return Temperature;
-        }
-
-        /// <summary>
-        /// Update the temperature of each cell in the grid
-        /// </summary>
-        internal void Update()
-        {
-            // cells are only looked at once per frame. cells must keep track of their unultered temperature (LastTemperature)
-            // so that all blocks are working with the same simulation frame data.
-            Frame = Grid.SimulationFrame;
-            LastTemprature = Temperature;
-
-            // calculate delta between all neighboring blocks
-            float deltaTemperature = 0;
-            for (int i = 0; i < Neighbors.Count; i++)
-            {
-                ThermalCell ncell = Neighbors[i];
-                // area = meter^2
-                float area = Area <= ncell.Area ? Area : ncell.Area;
-
-                // conductivity, k = watt / (meter * Temp)
-                // kA = watt * meter / Temp
-                float kA = Definition.Conductivity * area * TouchingSerfacesByNeighbor[i];
-
-                // if the neighboring blocks have not been updated use temperature
-                // otherwise use LastTemperature
-                if (ncell.Frame != Frame)
-                {
-                    // deltaTemperature = watt * meter
-                    deltaTemperature += kA * (ncell.Temperature - Temperature);
-                }
-                else
-                {
-                    deltaTemperature += kA * (ncell.LastTemprature - Temperature);
-                }
-
-                //MyLog.Default.Info($"[{Settings.Name}] {Id}->{ncell.Id} ns: {TouchingSerfacesByNeighbor[i]} T: {Temperature} nT: {ncell.Temperature} dT: {deltaTemperature}");
-            }
-
-            // use Stefan-Boltzmann Law to calculate the energy lossed/gained from the environment
-            // we make it nagiative to indicate removal of energy
-            //Radiation = -1 * Definition.Emissivity * Tools.BoltzmannConstant * ExposedSurfaceArea * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTemprature * Grid.FrameAmbientTemprature * Grid.FrameAmbientTemprature * Grid.FrameAmbientTemprature);
-
-            if (!Grid.FrameSolarOccluded)
-            {
-                //float intensity = DirectionalRadiationIntensity(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
-                //Radiation += Settings.Instance.SolarEnergy * Definition.Emissivity * (intensity * ExposedSurfaceArea);
-            }
-
-            // calculate ambiant temprature
-            //deltaTemperature += (Grid.FrameAmbientTemprature - Temperature) * (Exposed.Count * CubeAreaInv) * Grid.FrameAmbientStrength * Grid.FrameAmbientConductivity;
-
-
-
-            // C = Temp / Watt * meter and deltaTemperature = Watt * Meter.
-            // these cancel leaving only temperature behind
-            DeltaTemperature = ((C * deltaTemperature) + (Radiation * ThermalMassInv)) * Settings.Instance.TimeScaleRatio;
-            Temperature = Math.Max(0, Temperature + DeltaTemperature);
-
-            // generate heat based on power usage
-            Temperature += HeatGeneration;
-
-            // apply solar heating
-            //float solarIntensity = 0;
-            //if (!Grid.FrameSolarOccluded)
-            //{
-            //    solarIntensity = UpdateRadiation(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
-            //    Temperature += Area * Settings.Instance.SolarEnergy * solarIntensity * Grid.FrameSolarDecay * c * Settings.Instance.TimeScaleRatio;
-            //}
-
-            
-            if (Settings.Debug && MyAPIGateway.Session.IsServer)
-            {
-                Vector3 color = Tools.GetTemperatureColor(Temperature);
-                //Vector3 c = Tools.GetTemperatureColor(solarIntensity, 10, 0.5f, 4);
-                if (Block.ColorMaskHSV != color)
-                {
-                    Block.CubeGrid.ColorBlocks(Block.Min, Block.Max, color);
-                }
-            }
-            
-        }
 
         /// <summary>
         /// Calculates the intensity of directional heating objects (likely only solar)
