@@ -18,6 +18,7 @@ using System.IO.Compression;
 using VRage.Game.Components.Interfaces;
 using System.Drawing;
 using System.Security.AccessControl;
+using System.Reflection.Metadata.Ecma335;
 
 namespace Thermodynamics
 {
@@ -41,19 +42,17 @@ namespace Thermodynamics
         public float ExposedSurfaceArea; // m^2 of all exposed faces on this block
         public float Radiation;
         public float ThermalMassInv; // 1 / SpecificHeat * Mass
+        public float boltzmann;
 
         public ThermalGrid Grid;
         public IMySlimBlock Block;
         public ThermalCellDefinition Definition;
 
-        public List<Vector3I> Exposed = new List<Vector3I>();
-        public List<Vector3I> ExposedSurface = new List<Vector3I>();
-        public List<Vector3I> ExposedSurfaceDirection = new List<Vector3I>();
-        public List<Vector3I> Inside = new List<Vector3I>();
-        public List<Vector3I> InsideSurface = new List<Vector3I>();
-
-        public List<ThermalCell> Neighbors = new List<ThermalCell>();
-        public List<int> TouchingSerfacesByNeighbor = new List<int>();
+        private List<ThermalCell> Neighbors = new List<ThermalCell>();
+        private List<int> TouchingSerfacesByNeighbor = new List<int>();
+        
+        public int ExposedSurfaces = 0;
+        private List<Vector3I> ExposedSurfaceDirections = new List<Vector3I>();
 
         public ThermalCell(ThermalGrid g, IMySlimBlock b)
         {
@@ -61,8 +60,6 @@ namespace Thermodynamics
             Block = b;
             Id = b.Position.Flatten();
             Definition = ThermalCellDefinition.GetDefinition(Block.BlockDefinition.Id);
-
-            MyLog.Default.Info($"[{Settings.Name}] {Block.BlockDefinition.Id}");
 
             //TODO: the listeners need to handle changes at the end
             //of the update cycle instead of whenever.
@@ -72,10 +69,7 @@ namespace Thermodynamics
             Area = Block.CubeGrid.GridSize * Block.CubeGrid.GridSize;
             C = 1 / (Definition.SpecificHeat * Mass * Block.CubeGrid.GridSize);
             ThermalMassInv = 1f / (Definition.SpecificHeat * Mass);
-
-            Vector3I size = (Block.Max - Block.Min) + 1;
-            float largestSurface = Math.Max(size.X * size.Y, Math.Max(size.X * size.Z, size.Y * size.Z));
-            float kA = Definition.Conductivity * (Area * largestSurface);
+            boltzmann = -1 * Definition.Emissivity * Tools.BoltzmannConstant;
 
             UpdateHeat();
         }
@@ -118,7 +112,7 @@ namespace Thermodynamics
             }
             else if (fat is IMyDoor)
             {
-                (fat as IMyDoor).DoorStateChanged += (state) => Grid.ExternalBlockReset();
+                (fat as IMyDoor).DoorStateChanged += (state) => Grid.ResetMapper();
             }
             else if (fat is IMyLandingGear)
             {
@@ -318,7 +312,15 @@ namespace Thermodynamics
             n1.Neighbors.Add(n2);
             n2.Neighbors.Add(n1);
 
-            int area = Tools.FindTouchingSurfaceArea(n1.Block.Min, n1.Block.Max + 1, n2.Block.Min, n2.Block.Max + 1);
+            int area = 0;
+            if (n1.Grid.Entity.EntityId != n2.Grid.Entity.EntityId)
+            {
+                area = 1;
+            }
+            else 
+            {
+                area = Tools.FindTouchingSurfaceArea(n1.Block.Min, n1.Block.Max + 1, n2.Block.Min, n2.Block.Max + 1);
+            }
 
             n1.TouchingSerfacesByNeighbor.Add(area);
             n2.TouchingSerfacesByNeighbor.Add(area);
@@ -381,14 +383,17 @@ namespace Thermodynamics
                     deltaTemperature += kA * (ncell.LastTemprature - Temperature);
                 }
 
-                //MyLog.Default.Info($"[{Settings.Name}] {Id}->{ncell.Id} ns: {TouchingSerfacesByNeighbor[i]} T: {Temperature} nT: {ncell.Temperature} dT: {deltaTemperature}");
+                //if (Block.BlockDefinition.Id.ToString().Contains("LargeRotor")) 
+                //{
+                //    MyLog.Default.Info($"[{Settings.Name}] {Id}->{ncell.Id} ns: {TouchingSerfacesByNeighbor[i]} T: {Temperature} nT: {ncell.Temperature} dT: {deltaTemperature}");
+                //}
             }
 
             // use Stefan-Boltzmann Law to calculate the energy lossed/gained from the environment
             // we make it nagiative to indicate removal of energy
-            Radiation = -1 * Definition.Emissivity * Tools.BoltzmannConstant * ExposedSurfaceArea * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTempratureP4);
+            Radiation = boltzmann * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTempratureP4);
 
-            if (!Grid.FrameSolarOccluded)
+            if (Settings.Instance.EnableSolarHeat && !Grid.FrameSolarOccluded)
             {
                 float intensity = DirectionalRadiationIntensity(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
                 Radiation += Settings.Instance.SolarEnergy * Definition.Emissivity * (intensity * ExposedSurfaceArea);
@@ -402,9 +407,9 @@ namespace Thermodynamics
             // generate heat based on power usage
             Temperature += HeatGeneration;
 
-            if (Temperature > Definition.CriticalTemperature) 
+            if (Settings.Instance.EnableDamage = Temperature > Definition.CriticalTemperature) 
             {
-                Block.DoDamage((Temperature - Definition.CriticalTemperature), MyStringHash.GetOrCompute("thermal"), false);
+                Block.DoDamage((Temperature - Definition.CriticalTemperature) * Definition.CriticalTemperatureScaler, MyStringHash.GetOrCompute("thermal"), false);
             }
 
             if (Settings.Debug && MyAPIGateway.Session.IsServer)
@@ -431,83 +436,47 @@ namespace Thermodynamics
             HeatGeneration = Settings.Instance.TimeScaleRatio * (produced + consumed) * ThermalMassInv;
         }
 
-
-        public void UpdateSurfaces(ref HashSet<Vector3I> exposed, ref HashSet<Vector3I> exposedSurface, ref HashSet<Vector3I> inside, ref HashSet<Vector3I> insideSurface)
+        public void UpdateSurfaces(ref HashSet<Vector3I> exterior, ref Vector3I[] neighbors)
         {
-            Inside.Clear();
-            InsideSurface.Clear();
+            ExposedSurfaces = 0;
+            ExposedSurfaceDirections.Clear();
 
-            Exposed.Clear();
-            ExposedSurface.Clear();
-            ExposedSurfaceDirection.Clear();
-
-            // define the cells area
             Vector3I min = Block.Min;
             Vector3I max = Block.Max + 1;
 
-            // define the connected cell area
-            Vector3I emin = Block.Min - 1;
-            Vector3I emax = Block.Max + 2;
-
-            for (int x = emin.X; x < emax.X; x++)
+            for (int x = min.X; x < max.X; x++)
             {
-                bool xIn = x >= min.X && x < max.X;
-
-                for (int y = emin.Y; y < emax.Y; y++)
+                for (int y = min.Y; y < max.Y; y++)
                 {
-                    bool yIn = y >= min.Y && y < max.Y;
-
-                    for (int z = emin.Z; z < emax.Z; z++)
+                    for (int z = min.Z; z < max.Z; z++)
                     {
-                        bool zIn = z >= min.Z && z < max.Z;
+                        Vector3I node = new Vector3I(x, y, z);
+                        int flag = Grid.BlockNodes[node];
 
-                        if ((!xIn && yIn && zIn ||
-                            xIn && !yIn && zIn ||
-                            xIn && yIn && !zIn) == false
-                            ) continue;
-
-                        Vector3I p = new Vector3I(x, y, z);
-
-                        if (exposed.Contains(p))
+                        for (int i = 0; i < 6; i++) 
                         {
-                            Exposed.Add(p);
-
-                            if (exposedSurface.Contains(p))
+                            // if this node is solid but the neighboring block is not, add an exposed serface
+                            int d = (1 << i);
+                            int nd = (1 << i + 6);
+                            if ((flag&nd) == 0) 
                             {
-                                ExposedSurface.Add(p);
-                                Vector3I dir = Vector3I.Zero;
-                                if (!xIn)
+                                Vector3I neighbor = neighbors[i];
+                                Vector3I n = node + neighbor;
+
+                                if (exterior.Contains(n))
                                 {
-                                    dir.X = x == max.X ? 1 : -1;
+                                    ExposedSurfaces++;
+                                    if (!ExposedSurfaceDirections.Contains(neighbor))
+                                        ExposedSurfaceDirections.Add(neighbor);
                                 }
-                                else if (!yIn)
-                                {
-                                    dir.Y = y == max.Y ? 1 : -1;
-                                }
-                                else
-                                {
-                                    dir.Z = z == max.Z ? 1 : -1;
-                                }
-
-                                ExposedSurfaceDirection.Add(dir);
-
-
-                            }
-                        }
-                        else if (inside.Contains(p))
-                        {
-                            Inside.Add(p);
-
-                            if (insideSurface.Contains(p))
-                            {
-                                InsideSurface.Add(p);
                             }
                         }
                     }
                 }
             }
 
-            ExposedSurfaceArea = Exposed.Count * Area;
+            ExposedSurfaceArea = ExposedSurfaces * Area;
+            boltzmann = -1 * Definition.Emissivity * Tools.BoltzmannConstant * ExposedSurfaceArea;
         }
 
 
@@ -523,10 +492,10 @@ namespace Thermodynamics
             MatrixD matrix = Grid.FrameMatrix;
             bool isCube = (Block.Max - Block.Min).Volume() <= 1;
 
-            for (int i = 0; i < ExposedSurfaceDirection.Count; i++)
+            for (int i = 0; i < ExposedSurfaceDirections.Count; i++)
             {
                 // calculate the surface direction
-                Vector3I direction = ExposedSurfaceDirection[i];
+                Vector3I direction = ExposedSurfaceDirections[i];
                 int directionIndex = Tools.DirectionToIndex(direction);
 
                 Vector3D startDirection = Vector3D.Rotate(direction, matrix);

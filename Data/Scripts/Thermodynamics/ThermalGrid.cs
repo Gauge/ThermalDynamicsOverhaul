@@ -79,6 +79,7 @@ namespace Thermodynamics
         public Vector3 FrameSolarDirection;
         public MatrixD FrameMatrix;
 
+        public float FrameAmbientTemprature;
         public float FrameAmbientTempratureP4;
         public float FrameSolarDecay;
         public bool FrameSolarOccluded;
@@ -108,6 +109,7 @@ namespace Thermodynamics
 
         public override bool IsSerialized()
         {
+            MyLog.Default.Info($"[{Settings.Name}] serializing");
             Save();
             return base.IsSerialized();
         }
@@ -156,8 +158,6 @@ namespace Thermodynamics
                 f |= bytes[i + 6] << 16;
                 f |= bytes[i + 7] << 24;
 
-
-
                 Thermals.list[PositionToIndex[id]].Temperature = f * 0.001f;
 
                 //MyLog.Default.Info($"[{Settings.Name}] [Unpack] {id} {PositionToIndex[id]} {Thermals.list[PositionToIndex[id]].Block.BlockDefinition.Id} - T: {f * 0.001f}");
@@ -166,7 +166,7 @@ namespace Thermodynamics
 
         private void Save()
         {
-            Stopwatch sw = Stopwatch.StartNew();
+            //Stopwatch sw = Stopwatch.StartNew();
 
             string data = Pack();
 
@@ -181,21 +181,21 @@ namespace Thermodynamics
             {
                 storage.Add(StorageGuid, data);
             }
-            sw.Stop();
-            MyLog.Default.Info($"[{Settings.Name}] [SAVE] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms, size: {data.Length}");
+            //sw.Stop();
+            //MyLog.Default.Info($"[{Settings.Name}] [SAVE] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms, size: {data.Length}");
         }
 
         private void Load()
         {
-            Stopwatch sw = Stopwatch.StartNew();
+            //Stopwatch sw = Stopwatch.StartNew();
 
             if (Entity.Storage.ContainsKey(StorageGuid))
             {
                 Unpack(Entity.Storage[StorageGuid]);
             }
 
-            sw.Stop();
-            MyLog.Default.Info($"[{Settings.Name}] [LOAD] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms");
+            //sw.Stop();
+            //MyLog.Default.Info($"[{Settings.Name}] [LOAD] {Grid.DisplayName} ({Grid.EntityId}) t-{((float)sw.ElapsedTicks / TimeSpan.TicksPerMillisecond).ToString("n8")}ms");
         }
 
         private void BlockAdded(IMySlimBlock b)
@@ -207,22 +207,19 @@ namespace Thermodynamics
             }
 
             ThermalCell cell = new ThermalCell(this, b);
-
             cell.AddAllNeighbors();
-
-            //MyLog.Default.Info($"[{Settings.Name}] [{Grid.EntityId}] Added ({b.Position.Flatten()}) {b.Position}");
 
             int index = Thermals.Allocate();
             PositionToIndex.Add(cell.Id, index);
             Thermals.list[index] = cell;
 
-            //MyLog.Default.Info($"[{Settings.Name}] {Grid.Name}: {index} - {cell.Id} null: {Thermals.list[index] == null} --- {b.BlockDefinition.Id}");
-
-            ExternalBlockReset();
+            MapBlocks(b, true);
         }
 
         private void BlockRemoved(IMySlimBlock b)
         {
+            MyLog.Default.Info($"[{Settings.Name}] block removed");
+
             if (Grid.EntityId != b.CubeGrid.EntityId)
             {
                 MyLog.Default.Info($"[{Settings.Name}] Removing Skipped - Grid: {Grid.EntityId} BlockGrid: {b.CubeGrid.EntityId} {b.Position}");
@@ -248,7 +245,7 @@ namespace Thermodynamics
             PositionToIndex.Remove(flat);
             Thermals.Free(index);
 
-            ExternalBlockReset();
+            ResetMapper();
         }
 
         private void GridSplit(MyCubeGrid g1, MyCubeGrid g2)
@@ -345,7 +342,7 @@ namespace Thermodynamics
                     // start a new simulation frame
                     SimulationFrame++;
 
-                    MapExternalBlocks();
+                    MapExterior();
                     PrepareNextSimulationStep();
 
                     // reverse the index direction
@@ -357,9 +354,7 @@ namespace Thermodynamics
                         ThermalCellUpdateComplete = true;
 
                     if (!NodeUpdateComplete &&
-                        ExposedQueue.Count == 0 &&
-                        SolidQueue.Count == 0 &&
-                        InsideQueue.Count == 0)
+                        ExteriorQueue.Count == 0)
                     {
                         NodeUpdateComplete = true;
                         ThermalCellUpdateComplete = false;
@@ -374,7 +369,7 @@ namespace Thermodynamics
                 {
                     if (!ThermalCellUpdateComplete)
                     {
-                        cell.UpdateSurfaces(ref ExposedNodes, ref ExposedSurface, ref InsideNodes, ref InsideSurface);
+                        cell.UpdateSurfaces(ref ExteriorNodes, ref neighbors);
                     }
 
                     cell.Update();
@@ -420,8 +415,8 @@ namespace Thermodynamics
                     FrameSolarOccluded = true;
                 }
 
-                FrameAmbientTempratureP4 = Math.Max(2.7f, ambient * airDensity);
-                FrameAmbientTempratureP4 = FrameAmbientTempratureP4 * FrameAmbientTempratureP4 * FrameAmbientTempratureP4 * FrameAmbientTempratureP4;
+                FrameAmbientTemprature = Math.Max(2.7f, ambient * airDensity);
+                FrameAmbientTempratureP4 = FrameAmbientTemprature * FrameAmbientTemprature * FrameAmbientTemprature * FrameAmbientTemprature;
                 FrameSolarDecay = 1 - def.SolarDecay * airDensity;
 
                 //TODO: implement underground core temparatures
@@ -500,8 +495,11 @@ namespace Thermodynamics
                 }
             }
 
-            var color = (FrameSolarOccluded) ? Color.Red.ToVector4() : Color.White.ToVector4();
-            MySimpleObjectDraw.DrawLine(position, position + (FrameSolarDirection * 15000000), MyStringId.GetOrCompute("Square"), ref color, 0.1f);
+            if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated) 
+            {
+                var color = (FrameSolarOccluded) ? Color.Red.ToVector4() : Color.White.ToVector4();
+                MySimpleObjectDraw.DrawLine(position, position + (FrameSolarDirection * 15000000), MyStringId.GetOrCompute("Square"), ref color, 0.1f);
+            }
         }
 
 

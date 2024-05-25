@@ -24,10 +24,16 @@ namespace Thermodynamics
         [ProtoMember(1)]
 		public int Version;
 
-		/// <summary>
-		/// the number of update cycles per second
-		/// </summary>
-		[ProtoMember(15)]
+		[ProtoMember(5)]
+		public bool EnableSolarHeat;
+
+		[ProtoMember(10)]
+		public bool EnableDamage;
+
+        /// <summary>
+        /// the number of update cycles per second
+        /// </summary>
+        [ProtoMember(15)]
 		public int Frequency;
 
 		/// <summary>
@@ -66,7 +72,9 @@ namespace Thermodynamics
 		{
 			Settings s = new Settings {
 				Version = 1,
-				Frequency = 1,
+				EnableSolarHeat = true,
+				EnableDamage = true,
+				Frequency = 60,
 				SimulationSpeed = 1,
                 SolarEnergy = 1000f, 
 				EnvironmentalRaycastDistance = 5000f,

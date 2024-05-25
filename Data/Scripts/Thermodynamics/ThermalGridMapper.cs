@@ -1,6 +1,7 @@
 ﻿using ProtoBuf.Meta;
 using Sandbox.Definitions;
 using Sandbox.Game;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
@@ -8,6 +9,7 @@ using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
 using VRage.Game;
+using System.Diagnostics;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -18,231 +20,170 @@ namespace Thermodynamics
 {
     public partial class ThermalGrid : MyGameLogicComponent
     {
-        private readonly Vector3I[] neighbors = new Vector3I[6]
+        private Vector3I[] neighbors = new Vector3I[6]
         {
-            new Vector3I(1, 0, 0),
-            new Vector3I(-1, 0, 0),
-            new Vector3I(0, 1, 0),
-            new Vector3I(0, -1, 0),
-            new Vector3I(0, 0, 1),
-            new Vector3I(0, 0, -1)
+            new Vector3I(1, 0, 0), // left
+            new Vector3I(-1, 0, 0), // right
+            new Vector3I(0, 1, 0), // up
+            new Vector3I(0, -1, 0), // down
+            new Vector3I(0, 0, 1), // forward
+            new Vector3I(0, 0, -1) // backward
         };
 
-        public HashSet<Vector3I> ExposedNodes = new HashSet<Vector3I>();
-        public HashSet<Vector3I> SolidNodes = new HashSet<Vector3I>();
-        public HashSet<Vector3I> InsideNodes = new HashSet<Vector3I>();
-
-        public HashSet<Vector3I> ExposedSurface = new HashSet<Vector3I>();
-        public HashSet<Vector3I> InsideSurface = new HashSet<Vector3I>();
-
-        public List<HashSet<Vector3I>> Rooms = new List<HashSet<Vector3I>>();
-
-        public Queue<Vector3I> ExposedQueue = new Queue<Vector3I>();
-        public Queue<Vector3I> SolidQueue = new Queue<Vector3I>();
-        public Queue<Vector3I> InsideQueue = new Queue<Vector3I>();
+        public HashSet<Vector3I> ExteriorNodes = new HashSet<Vector3I>();
+        public Queue<Vector3I> ExteriorQueue = new Queue<Vector3I>();
 
         private Vector3I min;
         private Vector3I max;
 
-        private bool RoomStartCheck = false;
         public int NodeCountPerFrame = 1;
         public bool NodeUpdateComplete = false;
 
-        public void ExternalBlockReset()
+        public Dictionary<Vector3I, int> BlockNodes = new Dictionary<Vector3I, int>();
+
+        private void MapBlocks(IMySlimBlock block, bool isNew = false, IMySlimBlock removed = null)
         {
-            min = Grid.Min - 1;
-            max = Grid.Max + 1;
+            int state = 0;
+            Vector3I min = block.Min;
+            Vector3I max = block.Max + 1;
 
-            ExposedQueue.Clear();
-            ExposedQueue.Enqueue(min);
-
-            ExposedNodes.Clear();
-            ExposedNodes.Add(min);
-
-            SolidNodes.Clear();
-            SolidQueue.Clear();
-
-            InsideNodes.Clear();
-            InsideQueue.Clear();
-
-            ExposedSurface.Clear();
-            InsideSurface.Clear();
-
-            Rooms.Clear();
-            RoomStartCheck = false;
-
-            NodeCountPerFrame = Math.Max((int)((max - min).Size / 60f), 1);
-            NodeUpdateComplete = false;
-        }
-
-        public void MapExternalBlocks()
-        {
-            if (SolidQueue.Count == 0 && InsideQueue.Count == 0 && ExposedQueue.Count == 0) return;
-
-            int loopCount = 0;
-
-            CrawlOutside(ref loopCount);
-
-            // Yes, CrawlBlocks Should be sandwitched between two CrawlInside calls
-            CrawlInside(ref loopCount);
-
-            CrawlBlocks(ref loopCount);
-
-            CrawlInside(ref loopCount);
-
-            //string text = "";
-            //for (int i = 0; i < Rooms.Count; i++)
-            // {
-            //    text += $" R{i} {Rooms[i].Count}";
-            //}
-
-            //MyLog.Default.Info($"[Mapper] {Grid.EntityId} ({loopCount},{ExposedQueue.Count},{InsideQueue.Count},{SolidQueue.Count})  Exposed {ExposedNodes.Count} ExposedSurface {ExposedSurface.Count} Solid {SolidNodes.Count} Inside {InsideNodes.Count} Rooms: {Rooms.Count}" + text);
-        }
-
-        private void CrawlInside(ref int loopCount)
-        {
-            while (InsideQueue.Count > 0 && loopCount < NodeCountPerFrame)
+            if (isNew)
             {
-                loopCount++;
-                Vector3I block = InsideQueue.Dequeue();
-                HashSet<Vector3I> room = Rooms[Rooms.Count - 1];
-
-                for (int i = 0; i < neighbors.Length; i++)
-                {
-                    Vector3I n = block + neighbors[i];
-
-                    if (InsideNodes.Contains(n) || SolidNodes.Contains(n) || ExposedNodes.Contains(n) || AreNodesAirtight(block, n))
-                        continue;
-
-                    room.Add(n);
-                    InsideNodes.Add(n);
-                    InsideQueue.Enqueue(n);
-                }
-            }
-        }
-
-        private void CrawlBlocks(ref int loopCount)
-        {
-            while (SolidQueue.Count > 0 && loopCount < NodeCountPerFrame)
-            {
-                loopCount++;
-                Vector3I block = SolidQueue.Dequeue();
-
-                for (int i = 0; i < neighbors.Length; i++)
-                {
-                    Vector3I n = block + neighbors[i];
-
-                    if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || SolidNodes.Contains(n) || ExposedNodes.Contains(n) || InsideNodes.Contains(n))
-                        continue;
-
-                    if (!AreNodesAirtight(block, n))
-                    {
-                        // if inside is found start working on it right away
-                        // this block can be redone later
-                        SolidQueue.Enqueue(block);
-                        InsideQueue.Enqueue(n);
-
-                        Rooms.Add(new HashSet<Vector3I>());
-
-                        InsideNodes.Add(n);
-                        Rooms[Rooms.Count - 1].Add(n);
-
-                        return;
-                    }
-
-                    SolidNodes.Add(n);
-                    SolidQueue.Enqueue(n);
-                }
-            }
-        }
-
-        private void CrawlOutside(ref int loopCount)
-        {
-            while (ExposedQueue.Count > 0 && loopCount < NodeCountPerFrame)
-            {
-                loopCount++;
-                Vector3I block = ExposedQueue.Dequeue();
-
-                for (int i = 0; i < neighbors.Length; i++)
-                {
-                    Vector3I n = block + neighbors[i];
-
-                    if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || ExposedNodes.Contains(n))
-                        continue;
-
-                    if (AreNodesAirtight(block, n, ref ExposedSurface))
-                    {
-                        if (SolidQueue.Count == 0)
-                            SolidQueue.Enqueue(n);
-                        continue;
-                    }
-
-                    ExposedNodes.Add(n);
-                    ExposedQueue.Enqueue(n);
-                }
-            }
-        }
-
-        private bool AreNodesAirtight(Vector3I start, Vector3I end)
-        {
-            // the the point being moved to is empty it is not air tight
-            IMySlimBlock target = Grid.GetCubeBlock(end);
-            if (target == null)
-                return false;
-
-            IMySlimBlock current = Grid.GetCubeBlock(start);
-
-            // verify that the block is fully built and airtight
-            if (current == target)
-            {
-                return (current.BlockDefinition as MyCubeBlockDefinition)?.IsAirTight == true;
+                if (Vector3I.Min(Grid.Min - 1, this.min) != this.min ||
+                    Vector3I.Max(Grid.Max + 1, this.max) != this.max)
+                    ResetMapper();
             }
 
-            return (current != null && IsAirtightBlock(current, start, end - start)) ||
-                IsAirtightBlock(target, end, start - end);
-        }
+            HashSet<IMySlimBlock> processedNeighbours = new HashSet<IMySlimBlock>();
+            processedNeighbours.Add(removed);
 
-        private bool AreNodesAirtight(Vector3I start, Vector3I end, ref HashSet<Vector3I> surfaces)
-        {
-            // the the point being moved to is empty it is not air tight
-            IMySlimBlock target = Grid.GetCubeBlock(end);
-            if (target == null)
-            {
-                surfaces.Add(end);
-                return false;
-            }
-
-            IMySlimBlock current = Grid.GetCubeBlock(start);
-
-            // verify that the block is fully built and airtight
-            if (current == target)
-            {
-                return (current.BlockDefinition as MyCubeBlockDefinition)?.IsAirTight == true;
-            }
-
-            return (current != null && IsAirtightBlock(current, start, end - start)) ||
-                IsAirtightBlock(target, end, start - end);
-        }
-
-        private bool IsAirtightBlock(IMySlimBlock block, Vector3I pos, Vector3 normal)
-        {
             MyCubeBlockDefinition def = block.BlockDefinition as MyCubeBlockDefinition;
-            if (def == null)
+            Matrix blockMatrix;
+            block.Orientation.GetMatrix(out blockMatrix);
+            blockMatrix.TransposeRotationInPlace();
+
+            bool isAirTight = def?.IsAirTight == true;
+            if (isAirTight)
             {
-                return false;
+                state = 63;
             }
 
-            if (def.IsAirTight.HasValue)
+            for (int x = min.X; x < max.X; x++)
             {
-                return def.IsAirTight.Value;
-            }
+                for (int y = min.Y; y < max.Y; y++)
+                {
+                    for (int z = min.Z; z < max.Z; z++)
+                    {
 
-            Matrix result;
-            block.Orientation.GetMatrix(out result);
-            result.TransposeRotationInPlace();
-            Vector3I transformedNormal = Vector3I.Round(Vector3.Transform(normal, result));
+                        Vector3I node = new Vector3I(x, y, z);
+
+                        for (int i = 0; i < neighbors.Length; i++)
+                        {
+                            Vector3I n = node + neighbors[i];
+                            Vector3 direction1 = node - n;
+                            Vector3 direction2 = n - node;
+
+                            // neighbour is the same block
+                            if (n.X >= min.X && n.Y >= min.Y && n.Z >= min.Z &&
+                                n.X < max.X && n.Y < max.Y && n.Z < max.Z)
+                            {
+
+                                if (IsAirtight(ref block, ref def, ref node, ref direction2, ref blockMatrix))
+                                {
+                                    state |= 1 << i;
+                                }
+
+                                if (IsAirtight(ref block, ref def, ref n, ref direction1, ref blockMatrix))
+                                {
+                                    state |= 1 << i + 6;
+                                }
+                            }
+                            else
+                            {
+                                IMySlimBlock nblock = Grid.GetCubeBlock(n);
+                                if (nblock == null)
+                                {
+                                    continue;
+                                }
+
+                                // update all neighbor blocks if this block was just added to the grid
+                                if (isNew && !processedNeighbours.Contains(nblock))
+                                {
+                                    MapBlocks(nblock);
+                                    processedNeighbours.Add(nblock);
+                                }
+
+                                MyCubeBlockDefinition ndef = nblock.BlockDefinition as MyCubeBlockDefinition;
+                                Matrix nMatrix;
+                                nblock.Orientation.GetMatrix(out nMatrix);
+                                nMatrix.TransposeRotationInPlace();
+
+                                if (IsAirtight(ref block, ref def, ref node, ref direction2, ref blockMatrix))
+                                {
+                                    state |= 1 << i;
+                                }
+
+                                if (ndef?.IsAirTight == true ||
+                                    IsAirtight(ref nblock, ref ndef, ref n, ref direction1, ref nMatrix))
+                                {
+                                    state |= 1 << i + 6;
+                                }
+                            }
+                        }
+
+                        if (isNew)
+                        {
+                            BlockNodes.Add(node, state);
+                        }
+                        else 
+                        {
+                            BlockNodes[node] = state;
+                        }
+
+                    }
+                }
+            }
+        }
+
+        private void MapBlockRemove(IMySlimBlock block) 
+        {
+            Vector3I min = block.Min;
+            Vector3I max = block.Max + 1;
+
+            for (int x = min.X; x < max.X; x++)
+            {
+                for (int y = min.Y; y < max.Y; y++)
+                {
+                    for (int z = min.Z; z < max.Z; z++)
+                    {
+                        Vector3I node = new Vector3I(x, y, z);
+
+                        int flag = BlockNodes[node];
+
+                        for (int i = 6; i < 12; i++) 
+                        {
+                            if ((flag & i) != 0) 
+                            {
+                                Vector3I n =  node + neighbors[i - 6];
+
+                                if (!(n.X >= min.X && n.Y >= min.Y && n.Z >= min.Z &&
+                                n.X < max.X && n.Y < max.Y && n.Z < max.Z)) 
+                                {
+                                    MapBlocks(Grid.GetCubeBlock(n), false, block);
+                                }
+
+                            }
+                        }
+
+                        BlockNodes.Remove(node);
+                    }
+                }
+            }
+        }
+
+        private bool IsAirtight(ref IMySlimBlock block, ref MyCubeBlockDefinition def, ref Vector3I pos, ref Vector3 normal, ref Matrix matrix)
+        {
             Vector3 position = Vector3.Zero;
-
             if (block.FatBlock != null)
             {
                 position = pos - block.FatBlock.Position;
@@ -251,25 +192,22 @@ namespace Thermodynamics
             IMyDoor door = block.FatBlock as IMyDoor;
             bool isDoorClosed = door != null && (door.Status == Sandbox.ModAPI.Ingame.DoorStatus.Closed || door.Status == Sandbox.ModAPI.Ingame.DoorStatus.Closing);
 
-            Vector3 value = Vector3.Transform(position, result) + def.Center;
+            Vector3I transformedNormal = Vector3I.Round(Vector3.Transform(normal, matrix));
+            Vector3 value = Vector3.Transform(position, matrix) + def.Center;
             switch (def.IsCubePressurized[Vector3I.Round(value)][transformedNormal])
             {
+                case MyCubeBlockDefinition.MyCubePressurizationMark.NotPressurized:
+                    return false;
                 case MyCubeBlockDefinition.MyCubePressurizationMark.PressurizedAlways:
                     return true;
                 case MyCubeBlockDefinition.MyCubePressurizationMark.PressurizedClosed:
-                    {
-                        if (isDoorClosed)
-                        {
-                            return true;
-                        }
-                        break;
-                    }
+                    return isDoorClosed;
             }
 
-            return isDoorClosed && IsDoorAirtight(door, ref transformedNormal, def);
+            return isDoorClosed && IsDoorAirtight(ref door, ref transformedNormal, ref def);
         }
 
-        private bool IsDoorAirtight(IMyDoor door, ref Vector3I normal, MyCubeBlockDefinition def)
+        private bool IsDoorAirtight(ref IMyDoor door, ref Vector3I normal, ref MyCubeBlockDefinition def)
         {
             if (!door.IsFullyClosed)
                 return false;
@@ -293,14 +231,82 @@ namespace Thermodynamics
             MyCubeBlockDefinition.MountPoint[] mountPoints = def.MountPoints;
             for (int i = 0; i < mountPoints.Length; i++)
             {
-                MyCubeBlockDefinition.MountPoint mountPoint2 = mountPoints[i];
-                if (normal == mountPoint2.Normal)
+                MyCubeBlockDefinition.MountPoint mountPoint = mountPoints[i];
+                if (normal == mountPoint.Normal)
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        public void ResetMapper()
+        {
+            min = Grid.Min - 1;
+            max = Grid.Max + 1;
+
+            ExteriorQueue.Clear();
+            ExteriorQueue.Enqueue(min);
+
+            ExteriorNodes.Clear();
+            ExteriorNodes.Add(min);
+
+            NodeCountPerFrame = Math.Max((int)((max - min).Size / 60f), 1);
+            NodeUpdateComplete = false;
+        }
+
+        public void MapExterior()
+        {
+            if (ExteriorQueue.Count == 0) return;
+
+            int loopCount = 0;
+
+            CrawlOutsideV2(ref loopCount);
+        }
+
+        private void CrawlOutsideV2(ref int loopCount)
+        {
+            while (ExteriorQueue.Count > 0 && loopCount < NodeCountPerFrame)
+            {
+                loopCount++;
+                Vector3I node = ExteriorQueue.Dequeue();
+
+                for (int i = 0; i < neighbors.Length; i++)
+                {
+                    // get the neighbor location
+                    Vector3I n = node + neighbors[i];
+
+                    // skip if the neighbor is out of bounds or already checked.
+                    if (Vector3I.Min(n, min) != min || Vector3I.Max(n, max) != max || ExteriorNodes.Contains(n))
+                        continue;
+
+                    int flag;
+                    if (BlockNodes.TryGetValue(n, out flag))
+                    {
+                        // get the alternate direction left/right, up/down
+                        int direction;
+                        if (i % 2 == 0)
+                        {
+                            direction = 1 << (i + 1);
+                        }
+                        else
+                        {
+                            direction = 1 << (i - 1);
+                        }
+
+                        // do not queue this block if it is airtight
+                        if ((flag & direction) == direction)
+                        {
+                            continue;
+                        }
+                    }
+
+                    // enqueue empty or non airtight nodes
+                    ExteriorNodes.Add(n);
+                    ExteriorQueue.Enqueue(n);
+                }
+            }
         }
     }
 }

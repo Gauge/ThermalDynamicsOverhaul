@@ -36,11 +36,6 @@ namespace Thermodynamics
 
                 return definition;
             }
-
-            //-5\left(x-4.5\right)^{2}
-
-            //public bool IsOccl
-
         }
 
         public class ExternalForceData
