@@ -10,6 +10,7 @@ namespace Thermodynamics
 
         public const float MWtoWatt = 1000000;
         public const float kWtoWatt = 1000;
+        public const float KphToMps = 1000f / 60f / 60f;
         public const float BoltzmannConstant = 0.00000005670374419f;
         public const float VacuumTemperaturePower4 = 53.1441f; // vacuum temp is 2.7 kelven. 2.7^4 is 53.1441;
         public const float ConductivityScaler = 1f / 10000f;
@@ -51,7 +52,7 @@ namespace Thermodynamics
         }
 
         /// <summary>
-        /// Generates a heat map
+        /// Generates a color based on the heat perameters
         /// </summary>
         /// <param name="temp">current temperature</param>
         /// <param name="max">maximum possible temprature</param>

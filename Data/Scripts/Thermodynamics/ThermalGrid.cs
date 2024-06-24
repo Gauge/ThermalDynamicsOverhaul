@@ -38,6 +38,7 @@ namespace Thermodynamics
         public MyFreeList<ThermalCell> Thermals = new MyFreeList<ThermalCell>();
         public Dictionary<int, float> RecentlyRemoved = new Dictionary<int, float>();
         public ThermalRadiationNode SolarRadiationNode = new ThermalRadiationNode();
+        public ThermalRadiationNode WindNode = new ThermalRadiationNode();
 
         /// <summary>
         /// current frame per second
@@ -76,6 +77,7 @@ namespace Thermodynamics
         public bool ThermalCellUpdateComplete = true;
 
 
+        public Vector3 FrameWindDirection;
         public Vector3 FrameSolarDirection;
         public MatrixD FrameMatrix;
 
@@ -403,6 +405,8 @@ namespace Thermodynamics
                 Vector3D surfacePointLocal = p.Entity.GetClosestSurfacePointLocal(ref local);
                 isUnderground = local.LengthSquared() < surfacePointLocal.LengthSquared();
                 float airDensity = p.Entity.GetAirDensity(position);
+                float windSpeed = p.Entity.GetWindSpeed(position);
+                 
 
                 float ambient = def.UndergroundTemperature;
                 if (!isUnderground)
@@ -419,9 +423,11 @@ namespace Thermodynamics
                 FrameAmbientTempratureP4 = FrameAmbientTemprature * FrameAmbientTemprature * FrameAmbientTemprature * FrameAmbientTemprature;
                 FrameSolarDecay = 1 - def.SolarDecay * airDensity;
 
+                FrameWindDirection = Vector3.Cross(p.GravityComponent.GetWorldGravityNormalized(position), p.Entity.WorldMatrix.Forward).Normalized() * windSpeed;
+
+
                 //TODO: implement underground core temparatures
             }
-
             if (FrameSolarOccluded) return;
 
             LineD line = new LineD(position, position + (FrameSolarDirection * 15000000));
@@ -498,7 +504,9 @@ namespace Thermodynamics
             if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated) 
             {
                 var color = (FrameSolarOccluded) ? Color.Red.ToVector4() : Color.White.ToVector4();
+                var color2 = Color.LightGoldenrodYellow.ToVector4();
                 MySimpleObjectDraw.DrawLine(position, position + (FrameSolarDirection * 15000000), MyStringId.GetOrCompute("Square"), ref color, 0.1f);
+                MySimpleObjectDraw.DrawLine(position, position + FrameWindDirection, MyStringId.GetOrCompute("Square"), ref color2, 0.1f);
             }
         }
 

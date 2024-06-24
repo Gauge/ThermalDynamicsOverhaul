@@ -41,6 +41,8 @@ namespace Thermodynamics
         public class ExternalForceData
         {
             public Vector3D Gravity = Vector3D.Zero;
+            public Vector3D WindDirection = Vector3D.Zero;
+            public float WindSpeed;
             public float AtmosphericPressure;
         }
  
@@ -86,18 +88,28 @@ namespace Thermodynamics
         /// returns the gravity force vetor being applied at a location
         /// also returns total air pressure at that location
         /// </summary>
-        public static ExternalForceData GetExternalForces(Vector3D WorldPosition)
+        public static ExternalForceData GetExternalForces(Vector3D worldPosition)
         {
             ExternalForceData data = new ExternalForceData();
 
+            Planet planet = null;
+            double distance = double.MaxValue;
             foreach (Planet p in Planets)
             {
-                data.Gravity += p.GravityComponent.GetWorldGravity(WorldPosition);
+                data.Gravity += p.GravityComponent.GetWorldGravity(worldPosition);
 
-                if (p.Entity.HasAtmosphere)
+                double d = (p.Position - worldPosition).LengthSquared();
+                if (d < distance)
                 {
-                    data.AtmosphericPressure += p.Entity.GetAirDensity(WorldPosition);
+                    planet = p;
+                    distance = d;
                 }
+            }
+
+            if (planet?.Entity.HasAtmosphere == true)
+            {
+                data.AtmosphericPressure = planet.Entity.GetAirDensity(worldPosition);
+                data.WindSpeed = planet.Entity.GetWindSpeed(worldPosition);
             }
 
             return data;

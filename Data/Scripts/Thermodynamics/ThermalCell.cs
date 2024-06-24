@@ -391,13 +391,22 @@ namespace Thermodynamics
 
             // use Stefan-Boltzmann Law to calculate the energy lossed/gained from the environment
             // we make it nagiative to indicate removal of energy
-            Radiation = boltzmann * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTempratureP4);
+            Radiation = boltzmann * Definition.Emissivity * (Temperature * Temperature * Temperature * Temperature - Grid.FrameAmbientTempratureP4);
 
             if (Settings.Instance.EnableSolarHeat && !Grid.FrameSolarOccluded)
             {
                 float intensity = DirectionalRadiationIntensity(ref Grid.FrameSolarDirection, ref Grid.SolarRadiationNode);
                 Radiation += Settings.Instance.SolarEnergy * Definition.Emissivity * (intensity * ExposedSurfaceArea);
             }
+
+            //float viscosity = 
+
+            //float windIntensity = DirectionalRadiationIntensity(ref Grid.FrameWindDirection, ref Grid.WindNode);
+
+            //float v = Grid.FrameWindDirection.Length();
+            //float hc = 10.45f - v + 10f * (float)Math.Sqrt(v);
+
+
 
             // C = Temp / Watt * meter and deltaTemperature = Watt * Meter.
             // these cancel leaving only temperature behind

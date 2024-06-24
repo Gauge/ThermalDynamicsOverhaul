@@ -1,6 +1,7 @@
 ﻿using Draygo.BlockExtensionsAPI;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.SessionComponents;
 using Sandbox.ModAPI;
@@ -12,6 +13,7 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using static VRageRender.MyBillboard;
 
 namespace Thermodynamics
 {
@@ -38,6 +40,22 @@ namespace Thermodynamics
             base.UnloadData();
         }
 
+        public Color GetTemperatureColor(float temp)
+        {
+            float max = 500f;
+            // Clamp the temperature to the range 0-100
+            float t = Math.Max(0, Math.Min(max, temp));
+
+
+
+            // Calculate the red and blue values using a linear scale
+            float red = (t / max);
+
+            float blue = (1f - (t / max));
+
+            return new Color(red, 0, blue, 255);
+        }
+
         public override void Simulate()
 		{
             if (Settings.Debug && !MyAPIGateway.Utilities.IsDedicated)
@@ -54,7 +72,7 @@ namespace Thermodynamics
                 if (grid == null) return;
 
                 ThermalGrid g = grid.GameLogic.GetAs<ThermalGrid>();
-                Vector3I position = grid.WorldToGridInteger(hit.Position + (matrix.Forward * 0.05f));
+                Vector3I position = grid.WorldToGridInteger(hit.Position + (matrix.Forward * 0.005f));
                 IMySlimBlock block = grid.GetCubeBlock(position);
 
                 if (block == null) return;
@@ -63,6 +81,28 @@ namespace Thermodynamics
 
                 if (c == null)
                     return;
+
+                Vector3D blockPosition;
+                Matrix blockRotation;
+
+                block.ComputeWorldCenter(out blockPosition);
+                block.Orientation.GetMatrix(out blockRotation);
+
+                MatrixD gridRotationMatrix = block.CubeGrid.WorldMatrix;
+                gridRotationMatrix.Translation = Vector3D.Zero;
+                blockRotation *= gridRotationMatrix;
+                MatrixD blockWorldMatrix = MatrixD.CreateWorld(blockPosition, blockRotation.Forward, blockRotation.Up);
+
+                float unit = block.CubeGrid.GridSize * 0.5f;
+                Vector3 halfExtents = new Vector3((float)unit, (float)unit, (float)unit);
+                BoundingBoxD box = new BoundingBoxD(-halfExtents, halfExtents);
+
+                //GetTemperatureColor(c.Temperature);
+
+                Color color = ColorExtensions.HSVtoColor(Tools.GetTemperatureColor(c.Temperature));
+
+
+                MySimpleObjectDraw.DrawTransparentBox(ref blockWorldMatrix, ref box, ref color, MySimpleObjectRasterizer.Solid, 1, 0.01f, null, null, true, -1, BlendTypeEnum.AdditiveTop, 1000f);
 
 
                 //MyAPIGateway.Utilities.ShowNotification($"[Grid] {tGrid.Entity.EntityId} Count: {tGrid.Thermals.Count}", 1, "White");
@@ -74,6 +114,7 @@ namespace Thermodynamics
                     $"tstep: {Settings.Instance.TimeScaleRatio.ToString("n2")} " +
                     $"ambT: {(g.FrameAmbientTemprature).ToString("n4")} " +
                     $"decay: {g.FrameSolarDecay.ToString("n4")} " +
+                    $"wind: {g.FrameWindDirection.Length().ToString("n4")} " +
                     $"isOcc: {g.FrameSolarOccluded}", 1, "White");
 
                 MyAPIGateway.Utilities.ShowNotification($"[Cell] {c.Block.Position} " +

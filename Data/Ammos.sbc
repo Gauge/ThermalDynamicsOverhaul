@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <Ammos>
+
+
+        <Ammo xsi:type="MyObjectBuilder_MissileAmmoDefinition">
+            <Id>
+                <TypeId>AmmoDefinition</TypeId>
+                <SubtypeId>Bottle</SubtypeId>
+            </Id>
+            <BasicProperties>
+                <DesiredSpeed>200</DesiredSpeed>
+                <SpeedVariance>0</SpeedVariance>
+                <MaxTrajectory>800</MaxTrajectory>
+                <IsExplosive>true</IsExplosive>
+                <BackkickForce>0</BackkickForce>
+                <PhysicalMaterial>Missile</PhysicalMaterial>
+                <ExplosiveDamageMultiplier>0</ExplosiveDamageMultiplier>
+                <DeathMessage>CauseOfDeath_HeavyWeapons</DeathMessage>
+            </BasicProperties>
+            <MissileProperties>
+                <MissileMass>1</MissileMass>
+                <MissileExplosionRadius>4</MissileExplosionRadius>
+                <MissileModelName>Models\Weapons\Projectile_Missile.mwm</MissileModelName>
+                <MissileAcceleration>600</MissileAcceleration>
+                <MissileInitialSpeed>100</MissileInitialSpeed>
+                <MissileSkipAcceleration>false</MissileSkipAcceleration>
+                <MissileExplosionDamage>0</MissileExplosionDamage>
+                <MissileTrailEffect>Smoke_Missile</MissileTrailEffect>
+            </MissileProperties>
+            <ExplosionFlags>AFFECT_VOXELS APPLY_FORCE_AND_DAMAGE CREATE_DECALS CREATE_SHRAPNELS APPLY_DEFORMATION FORCE_CUSTOM_END_OF_LIFE_EFFECT</ExplosionFlags>
+        </Ammo>
+
+    </Ammos>
+</Definitions>
